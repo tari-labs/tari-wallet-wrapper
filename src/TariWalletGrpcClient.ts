@@ -2,9 +2,12 @@ import { ChannelCredentials, ServiceError } from "@grpc/grpc-js";
 
 import {
   CheckConnectivityResponse,
+  GetAddressResponse,
   GetBalanceResponse,
   GetStateResponse,
   GetVersionResponse,
+  TransferRequest,
+  TransferResponse,
   WalletClient,
 } from "./client/wallet";
 import { GetIdentityResponse } from "./client/network";
@@ -84,6 +87,32 @@ export class TariWalletGrpcClient implements ITariWalletGrpcClient {
   public async getBalance(): Promise<GetBalanceResponse> {
     const stateResponse = await new Promise<GetBalanceResponse>((resolve, reject) => {
       this.client.getBalance({}, (error: ServiceError | null, response: GetBalanceResponse) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(response);
+        }
+      });
+    });
+    return stateResponse;
+  }
+
+  public async getAddress(): Promise<GetAddressResponse> {
+    const stateResponse = await new Promise<GetAddressResponse>((resolve, reject) => {
+      this.client.getAddress({}, (error: ServiceError | null, response: GetAddressResponse) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(response);
+        }
+      });
+    });
+    return stateResponse;
+  }
+
+  public async transfer(transferRequest: TransferRequest): Promise<TransferResponse> {
+    const stateResponse = await new Promise<TransferResponse>((resolve, reject) => {
+      this.client.transfer(transferRequest, (error: ServiceError | null, response: TransferResponse) => {
         if (error) {
           reject(error);
         } else {
