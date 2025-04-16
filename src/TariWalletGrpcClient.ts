@@ -19,6 +19,8 @@ export interface ITariWalletGrpcClient {
   checkConnectivity(): Promise<CheckConnectivityResponse>;
   identify(): Promise<GetIdentityResponse>;
   getBalance(): Promise<GetBalanceResponse>;
+  getAddress(): Promise<GetAddressResponse>;
+  transfer(transferRequest: TransferRequest): Promise<TransferResponse>;
 }
 
 export class TariWalletGrpcClient implements ITariWalletGrpcClient {
