@@ -1,4 +1,4 @@
-# tari-portal-wallet
+# Tari Wallet Interface
 
 A TypeScript client library for interacting with the Tari cryptocurrency wallet system via gRPC and CLI interfaces.
 

@@ -1,7 +1,8 @@
 {
   "scripts": {
-    "build:cjs": "tsc -p tsconfig.json",
-    "build:esm": "tsc -p tsconfig.esm.json",
+    "compile": "tsc -b ./tsconfig.cjs.json ./tsconfig.esm.json ./tsconfig.types.json",
+    "build:clean": "rm -rf ./build",
+    "build": "npm run build:clean && npm run compile && node ./scripts/prepare-package-json.js",
     "test": "vitest run src",
     "lint": "eslint .",
     "format": "prettier --check .",
@@ -11,14 +12,14 @@
   "author": "",
   "license": "ISC",
   "files": [
-    "dist"
+    "build"
   ],
-  "main": "dist/cjs/index.js",
-  "module": "dist/esm/index.js",
-  "types": "dist/esm/index.d.ts",
   "name": "@krakaw/wallet-interface",
   "version": "0.0.2",
   "description": "Tari Wallet API",
+  "main": "./build/cjs/lib.js",
+  "module": "./build/esm/lib.js",
+  "types": "./build/types/lib.d.ts",
   "devDependencies": {
     "@eslint/js": "^9.24.0",
     "@types/node": "^22.14.1",
@@ -35,5 +36,12 @@
     "@bufbuild/protobuf": "^2.2.5",
     "@grpc/grpc-js": "^1.13.3",
     "long": "^5.3.1"
+  },
+  "exports": {
+    ".": {
+      "types": "./build/types/lib.d.ts",
+      "require": "./build/cjs/lib.js",
+      "import": "./build/esm/lib.js"
+    }
   }
 }
