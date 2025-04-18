@@ -1,4 +1,4 @@
-import { TariWalletGrpcClient, utils } from "../lib";
+import { TariWalletGrpcClient } from "../lib";
 import { NativeChain, NativeChainError } from "./native_chain";
 import { Asset } from "./asset";
 import { Party, SwapState } from "./swap";
