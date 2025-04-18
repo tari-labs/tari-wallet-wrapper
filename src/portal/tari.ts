@@ -2,9 +2,10 @@ import { TariWalletGrpcClient, utils } from "../lib";
 import { NativeChain, NativeChainError } from "./native_chain";
 import { Asset } from "./asset";
 import { Party, SwapState } from "./swap";
-import { Liquidity } from "./liquidity";
-import { PaymentRecipient_PaymentType, TransactionEventResponse } from "../client/wallet";
+import { Liquidity, LiquidityProps } from "./liquidity";
+import { PaymentRecipient_PaymentType, TransactionEventResponse, TransferRequest, TransferResponse } from "../client/wallet";
 import Long from "long";
+import { randomSecret, sha256 } from "./crypto";
 /**
  * The native asset symbol for the lightning network
  * @type {string}
@@ -36,7 +37,6 @@ export class Tari extends NativeChain {
     super({ 'id': 'tari' })
 
     this.#walletGrpc = new TariWalletGrpcClient(props.url);
-
   }
 
 
@@ -61,15 +61,24 @@ export class Tari extends NativeChain {
       this.error('start.error', error)
       throw error
     }
-    // subscribe to all invoices
+
+    // subscribe to all transactions
     try {
-      this.#subscriptions.invoices = subscribeToInvoices(this.#walletGrpc).on(
-        'invoice_updated',
+      const streamPromise = this.#walletGrpc.streamTransactionEvents(
         this.#onInvoiceUpdated.bind(this),
-      )
+        (error: Error) => {
+          this.error('transaction.stream.error', error);
+          this.emit('error', error);
+        }
+      );
+      
+      streamPromise.then(stream => {
+        this.#subscriptions.transactions = stream;
+      });
+      
       this.#subscriptions.payments = {}
     } catch (e) {
-      const err = utils.parseTariError(e)
+      const err = parseTariError(e)
       this.error('start', err)
       throw err
     }
@@ -83,7 +92,9 @@ export class Tari extends NativeChain {
    * @returns {Promise<NativeChain>}
    */
   async stop(): Promise<this> {
-    this.#subscriptions.invoices.removeAllListeners()
+    if (this.#subscriptions.transactions) {
+      this.#subscriptions.transactions.cancel();
+    }
     this.info('stop')
     return this
   }
@@ -165,9 +176,86 @@ export class Tari extends NativeChain {
    * @returns {Promise<Liquidity>} The liquidity that was deposited
    */
   async deposit(liquidity: Liquidity): Promise<Liquidity> {
-    throw new NativeChainError('not implemented!', 'ENotImplemented', {
-      liquidity,
-    })
+    // validate the arguments
+    if (liquidity.chain !== this.id) {
+      const expected = this.id
+      const actual = liquidity.chain
+      const ctx = { liquidity }
+      throw NativeChainError.InvalidChain(expected, actual, ctx)
+    }
+
+    if (liquidity.symbol !== NATIVE_ASSET) {
+      const expected = NATIVE_ASSET
+      const actual = liquidity.symbol
+      const ctx = { liquidity }
+      throw NativeChainError.InvalidAsset(expected, actual, ctx)
+    }
+
+    if (!liquidity.isDeposit) {
+      throw NativeChainError.Unexpected(liquidity)
+    }
+
+    // The Tari wallet does not support BigInts, forcing casting to Number.
+    // This check ensures we don't lose precision when casting.
+    const { nativeAmount } = liquidity
+    if (nativeAmount <= 0 || nativeAmount > Number.MAX_SAFE_INTEGER) {
+      throw NativeChainError.InvalidAmount(nativeAmount)
+    }
+
+    return new Promise((resolve, reject) => {
+      try {
+        const preimage = randomSecret(32)
+        const id = sha256(preimage).slice(2) // drop the leading 0x for Tari
+        const secret = preimage.toString('hex')
+
+        // NOTE: shadow's incoming argument, liquidity, to create a new instance
+        // with a unique id
+        liquidity = new Liquidity({ ...liquidity, id: `0x${id}` })
+
+        const request: TransferRequest = {
+          recipients: [{
+            address: liquidity.nativeAddress, // Use the provided address for deposit
+            amount: Long.fromNumber(Number(liquidity.nativeAmount)), // checked to be in safe range
+            feePerGram: Long.fromNumber(1), // TODO: Make this configurable
+            paymentType: PaymentRecipient_PaymentType.STANDARD_MIMBLEWIMBLE,
+            paymentId: Buffer.from(id, 'hex')
+          }]
+        };
+
+        this.debug('deposit.starting', {
+          request,
+          lnd: { address: this.address },
+        })
+
+        // Send the transfer and wait for confirmation
+        this.#walletGrpc.transfer(request)
+          .then(async (response: TransferResponse) => {
+            const result = response.results[0];
+            if (!result.isSuccess) {
+              throw new Error(`Failed to send transfer: ${result.failureMessage}`);
+            }
+
+            // Wait for the transaction to be confirmed
+            await this.#waitForConfirmation(result.transactionId.toString());
+
+            // Store the payment details for later use
+            this.#subscriptions.payments[result.transactionId.toString()] = {
+              preImage: secret,
+              outputHash: result.transactionId.toString()
+            };
+
+            liquidity.nativeReceipt = result.transactionId.toString();
+            resolve(liquidity);
+          })
+          .catch((e) => {
+            const err = parseTariError(e, { liquidity });
+            reject(err);
+          });
+      } catch (e) {
+        const err = parseTariError(e, { liquidity });
+        reject(err);
+      }
+    });
   }
 
   /**
@@ -176,9 +264,86 @@ export class Tari extends NativeChain {
    * @returns {Promise<Liquidity>} The liquidity that was withdrawn
    */
   async withdraw(liquidity: Liquidity): Promise<Liquidity> {
-    throw new NativeChainError('not implemented!', 'ENotImplemented', {
-      liquidity,
-    })
+    // validate the arguments
+    if (liquidity.chain !== this.id) {
+      const expected = this.id
+      const actual = liquidity.chain
+      const ctx = { liquidity }
+      throw NativeChainError.InvalidChain(expected, actual, ctx)
+    }
+
+    if (liquidity.symbol !== NATIVE_ASSET) {
+      const expected = NATIVE_ASSET
+      const actual = liquidity.symbol
+      const ctx = { liquidity }
+      throw NativeChainError.InvalidAsset(expected, actual, ctx)
+    }
+
+    if (!liquidity.isWithdrawal) {
+      throw NativeChainError.Unexpected(liquidity)
+    }
+
+    // The Tari wallet does not support BigInts, forcing casting to Number.
+    // This check ensures we don't lose precision when casting.
+    const { nativeAmount } = liquidity
+    if (nativeAmount >= 0 || nativeAmount < Number.MIN_SAFE_INTEGER) {
+      throw NativeChainError.InvalidAmount(nativeAmount)
+    }
+
+    return new Promise((resolve, reject) => {
+      try {
+        const preimage = randomSecret(32)
+        const id = sha256(preimage).slice(2) // drop the leading 0x for Tari
+        const secret = preimage.toString('hex')
+
+        // NOTE: shadow's incoming argument, liquidity, to create a new instance
+        // with a unique id
+        liquidity = new Liquidity({ ...liquidity, id: `0x${id}` })
+
+        const request: TransferRequest = {
+          recipients: [{
+            address: liquidity.nativeAddress,
+            amount: Long.fromNumber(Number(-liquidity.nativeAmount)), // Convert negative amount to positive
+            feePerGram: Long.fromNumber(1), // TODO: Make this configurable
+            paymentType: PaymentRecipient_PaymentType.STANDARD_MIMBLEWIMBLE,
+            paymentId: Buffer.from(id, 'hex')
+          }]
+        };
+
+        this.debug('withdraw.starting', {
+          request,
+          lnd: { address: this.address },
+        })
+
+        // Send the transfer and wait for confirmation
+        this.#walletGrpc.transfer(request)
+          .then(async (response: TransferResponse) => {
+            const result = response.results[0];
+            if (!result.isSuccess) {
+              throw new Error(`Failed to send transfer: ${result.failureMessage}`);
+            }
+
+            // Wait for the transaction to be confirmed
+            await this.#waitForConfirmation(result.transactionId.toString());
+
+            // Store the payment details for later use
+            this.#subscriptions.payments[result.transactionId.toString()] = {
+              preImage: secret,
+              outputHash: result.transactionId.toString()
+            };
+
+            liquidity.nativeReceipt = result.transactionId.toString();
+            resolve(liquidity);
+          })
+          .catch((e) => {
+            const err = parseTariError(e, { liquidity });
+            reject(err);
+          });
+      } catch (e) {
+        const err = parseTariError(e, { liquidity });
+        reject(err);
+      }
+    });
   }
 
   //////////////////////////////////////////////////////////////////////////////
@@ -286,9 +451,50 @@ export class Tari extends NativeChain {
   }
 
   #onInvoiceUpdated(event: TransactionEventResponse) {
-    console.log('invoice updated:', event)
-  }
+    try {
+      if (!event.transaction) return;
 
+      const txId = event.transaction.txId;
+      const payment = this.#subscriptions.payments[txId];
+      if (!payment) return;
+
+      switch (event.transaction.status) {
+        case 'TRANSACTION_STATUS_MINED_CONFIRMED':
+          // Extract the liquidity message from the transaction
+          const paymentId = Buffer.from(event.transaction.paymentId).toString('hex');
+          const json = Buffer.from(paymentId, 'hex').toString('utf8');
+          this.debug('onInvoiceUpdated.json', { json });
+
+          let obj: LiquidityProps | null = null;
+          try {
+            obj = JSON.parse(json);
+          } catch (e: any) {
+            this.error('onInvoiceUpdated.json.parse', e, json);
+            throw NativeChainError.InvalidLiquidity(null, event);
+          }
+
+          if (!obj) {
+            throw new Error("Invalid liquidity object");
+          }
+
+          const liquidity = new Liquidity(obj);
+          this.debug('onInvoiceUpdated.liquidity', { liquidity });
+
+          // log and emit the event
+          if (liquidity.isDeposit) {
+            this.emitWithDelay('deposit', liquidity);
+          } else if (liquidity.isWithdrawal) {
+            this.emitWithDelay('withdraw', liquidity);
+          } else {
+            throw NativeChainError.InvalidLiquidity(liquidity, event);
+          }
+          break;
+      }
+    } catch (err) {
+      this.error('onInvoiceUpdated', err, event);
+      this.emit('error', err, event);
+    }
+  }
 
   #onTransactionEvent(event: TransactionEventResponse, party: Party) {
     if (event.transaction?.status === 'TRANSACTION_STATUS_MINED_CONFIRMED') {
@@ -308,39 +514,49 @@ export class Tari extends NativeChain {
     }
   }
 
+  async #waitForConfirmation(txId: string, timeoutMs: number = 30000): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        streamPromise.then(stream => stream.cancel());
+        reject(new Error(`Transaction confirmation timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
 
-  async #waitForConfirmation(txId: string): Promise<void> {
-
-    // @TODO Add a timeout
-    const stream = await this.#walletGrpc.streamTransactionEvents(
-      () => {
-        // Do nothing
-      },
-      (error: Error) => {
-        throw error;
-      }
-    );
-
-    stream.on('data', (event: TransactionEventResponse) => {
-      if (event.transaction?.txId === txId) {
-        switch (event.transaction.status) {
-          case 'TRANSACTION_STATUS_MINED_CONFIRMED':
-            return true;
-          case 'TRANSACTION_STATUS_REJECTED':
-            throw new Error(`Transaction was rejected: ${txId}`);
-          case 'TRANSACTION_STATUS_NOT_FOUND':
-            throw new Error(`Transaction not found: ${txId}`);
+      const streamPromise = this.#walletGrpc.streamTransactionEvents(
+        () => {
+          // Do nothing on data
+        },
+        (error: Error) => {
+          clearTimeout(timeout);
+          reject(error);
         }
-        // Close the stream
-        stream.cancel();
-      }
+      );
+
+      streamPromise.then(stream => {
+        stream.on('data', (event: TransactionEventResponse) => {
+          if (event.transaction?.txId === txId) {
+            switch (event.transaction.status) {
+              case 'TRANSACTION_STATUS_MINED_CONFIRMED':
+                clearTimeout(timeout);
+                stream.cancel();
+                resolve();
+                break;
+              case 'TRANSACTION_STATUS_REJECTED':
+                clearTimeout(timeout);
+                stream.cancel();
+                reject(new Error(`Transaction was rejected: ${txId}`));
+                break;
+              case 'TRANSACTION_STATUS_NOT_FOUND':
+                clearTimeout(timeout);
+                stream.cancel();
+                reject(new Error(`Transaction not found: ${txId}`));
+                break;
+            }
+          }
+        });
+      });
     });
-
   }
-
-
 }
-
 
 /**
  * Parses a tari module error into a AssetChainError instance
@@ -349,12 +565,16 @@ export class Tari extends NativeChain {
  * @returns {NativeChainError}
  */
 function parseTariError(e: any, ctx?: object): NativeChainError {
-  if (Array.isArray(e)) {
-    const [, errorCode] = e
-    const message = errorCode.replace(/([A-Z])/g, ' $1').trim()
-    const code = `E${errorCode}`
-    return new NativeChainError(message, code, ctx)
+  if (e instanceof Error) {
+    return NativeChainError.Unexpected(ctx, e);
   }
 
-  return NativeChainError.Unexpected(ctx, e)
+  if (Array.isArray(e)) {
+    const [, errorCode] = e;
+    const message = errorCode.replace(/([A-Z])/g, ' $1').trim();
+    const code = `E${errorCode}`;
+    return new NativeChainError(message, code, ctx);
+  }
+
+  return NativeChainError.Unexpected(ctx, e);
 }
