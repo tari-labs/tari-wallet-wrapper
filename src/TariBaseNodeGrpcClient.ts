@@ -1,7 +1,7 @@
 import { ChannelCredentials, ServiceError } from "@grpc/grpc-js";
 
-import { BaseNodeClient, TipInfoResponse } from "./client/base_node";
-import { Empty } from "./client/types";
+import { BaseNodeClient, TipInfoResponse } from "./client/base_node.js";
+import { Empty } from "./client/types.js";
 
 export interface ITariBaseNodeGrpcClient {
   close(): void;

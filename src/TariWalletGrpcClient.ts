@@ -16,7 +16,7 @@ import {
   ClaimShaAtomicSwapRequest,
   ClaimShaAtomicSwapResponse,
   GetCompleteAddressResponse,
-} from "./client/wallet";
+} from "./client/wallet.js";
 import { GetIdentityResponse } from "./client/network.js";
 import { ClientReadableStream } from "@grpc/grpc-js";
 export interface ITariWalletGrpcClient {

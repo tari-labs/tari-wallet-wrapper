@@ -1,8 +1,8 @@
-import { TariWalletCliClient } from './TariWalletCliClient';
-import { TariWalletGrpcClient } from './TariWalletGrpcClient';
-import { TariBaseNodeGrpcClient } from './TariBaseNodeGrpcClient';
-import * as utils from './utils';
-import * as client from './client';
+import { TariWalletCliClient } from './TariWalletCliClient.js';
+import { TariWalletGrpcClient } from './TariWalletGrpcClient.js';
+import { TariBaseNodeGrpcClient } from './TariBaseNodeGrpcClient.js';
+import * as utils from './utils/index.js';
+import * as client from './client/index.js';
 export {
     TariWalletCliClient,
     TariWalletGrpcClient,

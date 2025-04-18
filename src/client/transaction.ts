@@ -7,8 +7,8 @@
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 import Long from "long";
-import { SideChainFeature } from "./sidechain_types";
-import { ComAndPubSignature, RangeProof, Signature } from "./types";
+import { SideChainFeature } from "./sidechain_types.js";
+import { ComAndPubSignature, RangeProof, Signature } from "./types.js";
 
 export const protobufPackage = "tari.rpc";
 
