@@ -55,7 +55,7 @@ export class Tari extends NativeChain {
   async start() {
     try {
       const address = await this.#walletGrpc.getAddress();
-      this.#nodePubKey = utils.parseTariAddress(Buffer.from(address.oneSidedAddress)).publicViewKey;
+      this.#nodePubKey = address.oneSidedAddressBase58;
       this.debug('start.nodePubKey', this.#nodePubKey)
     } catch (error) {
       this.error('start.error', error)
@@ -283,6 +283,10 @@ export class Tari extends NativeChain {
       this.error('settleInvoice', err);
       throw err;
     }
+  }
+
+  #onInvoiceUpdated(event: TransactionEventResponse) {
+    console.log('invoice updated:', event)
   }
 
 

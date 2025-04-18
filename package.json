@@ -35,6 +35,7 @@
   "dependencies": {
     "@bufbuild/protobuf": "^2.2.5",
     "@grpc/grpc-js": "^1.13.3",
+    "base58-monero": "^0.0.5",
     "bs58": "^6.0.0",
     "long": "^5.3.1"
   },
