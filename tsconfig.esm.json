@@ -4,7 +4,11 @@
         "esModuleInterop": true,
         "outDir": "./build/esm",
         "module": "ESNext",
-        "moduleResolution": "node",
-        "declaration": false
+        "moduleResolution": "bundler",
+        "declaration": false,
+        "baseUrl": ".",
+        "paths": {
+            "@/*": ["src/*"]
+        }
     }
 }

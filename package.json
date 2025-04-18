@@ -44,6 +44,21 @@
       "types": "./build/types/lib.d.ts",
       "require": "./build/cjs/lib.js",
       "import": "./build/esm/lib.js"
+    },
+    "./TariWalletCliClient": {
+      "types": "./build/types/TariWalletCliClient.d.ts",
+      "require": "./build/cjs/TariWalletCliClient.js",
+      "import": "./build/esm/TariWalletCliClient.js"
+    },
+    "./TariWalletGrpcClient": {
+      "types": "./build/types/TariWalletGrpcClient.d.ts",
+      "require": "./build/cjs/TariWalletGrpcClient.js",
+      "import": "./build/esm/TariWalletGrpcClient.js"
+    },
+    "./TariBaseNodeGrpcClient": {
+      "types": "./build/types/TariBaseNodeGrpcClient.d.ts",
+      "require": "./build/cjs/TariBaseNodeGrpcClient.js",
+      "import": "./build/esm/TariBaseNodeGrpcClient.js"
     }
   }
 }
