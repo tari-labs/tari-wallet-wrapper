@@ -1,4 +1,4 @@
-const {TariWalletGrpcClient, utils} = require('./build/cjs/lib')
+const {TariWalletGrpcClient, utils} = require('./build')
 
 const client = new TariWalletGrpcClient('localhost:18183')
 
