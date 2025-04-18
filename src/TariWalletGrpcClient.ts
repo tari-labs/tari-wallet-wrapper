@@ -6,6 +6,7 @@ import {
   GetBalanceResponse,
   GetStateResponse,
   GetVersionResponse,
+  TransactionEventResponse,
   TransferRequest,
   TransferResponse,
   WalletClient,
@@ -120,6 +121,19 @@ export class TariWalletGrpcClient implements ITariWalletGrpcClient {
         } else {
           resolve(response);
         }
+      });
+    });
+    return stateResponse;
+  }
+
+  public async streamTransactionEvents(onData: any, onError: any): Promise<TransactionEventResponse> {
+    const stateResponse = await new Promise<TransactionEventResponse>((resolve, reject) => {
+      const stream = this.client.streamTransactionEvents({});
+      stream.on('data', (response: TransactionEventResponse) => {
+        onData(response);
+      });
+      stream.on('error', (error: ServiceError) => {
+        onError(error);
       });
     });
     return stateResponse;
