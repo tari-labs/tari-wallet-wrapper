@@ -4,8 +4,8 @@
       "long": ["./src/long-wrapper.ts"]
     },
     "outDir": "./build",                                   /* Specify an output folder for all emitted files. */
-    "incremental": true,
-    "composite": true,
+    "incremental": false,
+    "composite": false,
     "target": "esnext",
     "lib": ["ESNext"],
     "module": "nodenext",
