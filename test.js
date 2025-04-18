@@ -1,4 +1,4 @@
-const {TariWalletGrpcClient} = require('./build/cjs/lib')
+const {TariWalletGrpcClient, utils} = require('./build/cjs/lib')
 
 // Constants
 const TARI_ADDRESS_INTERNAL_SINGLE_SIZE = 35; // Size of a Tari address in bytes
@@ -50,62 +50,6 @@ function validateChecksum(bytes) {
     return true;
 }
 
-// Parse Tari address from bytes and extract keys
-function parseTariAddress(bytes) {
-    console.log('Address bytes length:', bytes.length);
-    console.log('Address bytes (hex):', bytes.toString('hex'));
-
-    if (bytes.length !== TARI_ADDRESS_INTERNAL_SINGLE_SIZE && bytes.length !== TARI_ADDRESS_INTERNAL_DUAL_SIZE) {
-        throw new Error(TariAddressError.InvalidSize);
-    }
-
-    if (!validateChecksum(bytes)) {
-        throw new Error(TariAddressError.InvalidChecksum);
-    }
-
-    const networkByte = bytes[0];
-    const networkName = getNetworkName(networkByte);
-    if (networkName === 'Invalid') {
-        throw new Error(TariAddressError.InvalidNetwork);
-    }
-
-    const featuresByte = bytes[1];
-    const features = [];
-    for (const [key, value] of Object.entries(TariAddressFeatures)) {
-        if (featuresByte & value) {
-            features.push(key);
-        }
-    }
-
-    // Extract keys based on address type
-    let publicSpendKey;
-    let publicViewKey;
-
-    if (bytes.length === TARI_ADDRESS_INTERNAL_SINGLE_SIZE) {
-        // Single address: bytes 2-34 contain the public spend key
-        publicSpendKey = Buffer.from(bytes.slice(2, 34));
-        publicViewKey = null;
-        console.log('Single address detected');
-    } else {
-        // Dual address: 
-        // bytes 2-34 contain the public view key
-        // bytes 34-66 contain the public spend key
-        publicViewKey = Buffer.from(bytes.slice(2, 34));
-        publicSpendKey = Buffer.from(bytes.slice(34, 66));
-        console.log('Dual address detected');
-        console.log('View key bytes (hex):', publicViewKey.toString('hex'));
-        console.log('Spend key bytes (hex):', publicSpendKey.toString('hex'));
-    }
-
-    return {
-        network: networkName,
-        features,
-        publicSpendKey,
-        publicViewKey,
-        // Note: Private keys cannot be extracted from public addresses
-        // They must be stored separately and securely
-    };
-}
 
 // Helper function to format key as hex string
 function formatKeyAsHex(keyBuffer) {
@@ -187,7 +131,7 @@ async function main() {
     console.log('identity nodeId:', identity.nodeId.toString('hex'))
 
     const address = (await client.getAddress())
-    const parsedAddress = parseTariAddress(Buffer.from(address.oneSidedAddress));
+    const parsedAddress = utils.parseTariAddress(Buffer.from(address.oneSidedAddress));
     console.log('parsedAddress:', parsedAddress)
 
     const version = await client.getVersion()

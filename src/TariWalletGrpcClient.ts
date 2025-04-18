@@ -10,9 +10,14 @@ import {
   TransferRequest,
   TransferResponse,
   WalletClient,
+  PaymentRecipient,
+  SendShaAtomicSwapRequest,
+  SendShaAtomicSwapResponse,
+  ClaimShaAtomicSwapRequest,
+  ClaimShaAtomicSwapResponse,
 } from "./client/wallet";
 import { GetIdentityResponse } from "./client/network";
-
+import { ClientReadableStream } from "@grpc/grpc-js";
 export interface ITariWalletGrpcClient {
   close(): void;
   getVersion(): Promise<GetVersionResponse>;
@@ -22,6 +27,9 @@ export interface ITariWalletGrpcClient {
   getBalance(): Promise<GetBalanceResponse>;
   getAddress(): Promise<GetAddressResponse>;
   transfer(transferRequest: TransferRequest): Promise<TransferResponse>;
+  streamTransactionEvents(onData: any, onError: any): Promise<ClientReadableStream<TransactionEventResponse>>;
+  sendShaAtomicSwap(sendRequest: SendShaAtomicSwapRequest): Promise<SendShaAtomicSwapResponse>;
+  claimShaAtomicSwap(claimRequest: ClaimShaAtomicSwapRequest): Promise<ClaimShaAtomicSwapResponse>;
 }
 
 export class TariWalletGrpcClient implements ITariWalletGrpcClient {
@@ -126,8 +134,8 @@ export class TariWalletGrpcClient implements ITariWalletGrpcClient {
     return stateResponse;
   }
 
-  public async streamTransactionEvents(onData: any, onError: any): Promise<TransactionEventResponse> {
-    const stateResponse = await new Promise<TransactionEventResponse>((resolve, reject) => {
+  public async streamTransactionEvents(onData: any, onError: any): Promise<ClientReadableStream<TransactionEventResponse>> {
+    const stateResponse = await new Promise<ClientReadableStream<TransactionEventResponse>>((resolve, reject) => {
       const stream = this.client.streamTransactionEvents({});
       stream.on('data', (response: TransactionEventResponse) => {
         onData(response);
@@ -135,8 +143,34 @@ export class TariWalletGrpcClient implements ITariWalletGrpcClient {
       stream.on('error', (error: ServiceError) => {
         onError(error);
       });
+      resolve(stream);
     });
     return stateResponse;
+  }
+
+  public async sendShaAtomicSwap(sendRequest: SendShaAtomicSwapRequest): Promise<SendShaAtomicSwapResponse> {
+
+    return new Promise<SendShaAtomicSwapResponse>((resolve, reject) => {
+      this.client.sendShaAtomicSwapTransaction(sendRequest, (error: ServiceError | null, response: SendShaAtomicSwapResponse) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(response);
+        }
+      });
+    });
+  }
+
+  public async claimShaAtomicSwap(claimRequest: ClaimShaAtomicSwapRequest): Promise<ClaimShaAtomicSwapResponse> {
+    return new Promise<ClaimShaAtomicSwapResponse>((resolve, reject) => {
+      this.client.claimShaAtomicSwapTransaction(claimRequest, (error: ServiceError | null, response: ClaimShaAtomicSwapResponse) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(response);
+        }
+      });
+    });
   }
 }
 
