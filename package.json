@@ -15,7 +15,7 @@
     "build"
   ],
   "name": "@krakaw/wallet-interface",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Tari Wallet API",
   "main": "./build/cjs/lib.js",
   "module": "./build/esm/lib.js",
