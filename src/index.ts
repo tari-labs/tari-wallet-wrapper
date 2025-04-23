@@ -9,4 +9,6 @@ export {
     TariBaseNodeGrpcClient,
     utils,
     client
-}; 
+};
+
+

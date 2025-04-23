@@ -5,6 +5,7 @@ A TypeScript client library for interacting with the Tari cryptocurrency wallet 
 ## Features
 
 - Connect to Tari wallets via gRPC
+- Connect to Tari base nodes via gRPC
 - Execute wallet commands using CLI
 - Transfer funds
 - Manage SHA atomic swaps (initialize, finalize, claim refunds)
@@ -23,10 +24,10 @@ pnpm add @krakaw/wallet-interface
 ### gRPC Wallet Client
 
 ```typescript
-import { buildTariNodeClient } from '@krakaw/wallet-interface';
+import { TariWalletGrpcClient } from '@krakaw/wallet-interface';
 
 // Create a client connected to a Tari wallet gRPC service
-const client = buildTariNodeClient('localhost:18142');
+const client = new TariWalletGrpcClient('localhost:18142');
 
 // Get wallet balance
 const balance = await client.getBalance();
@@ -47,6 +48,22 @@ const result = await client.transfer({
 
 // Close the connection when done
 client.close();
+```
+
+### Base Node gRPC Client
+
+```typescript
+import { TariBaseNodeGrpcClient } from '@krakaw/wallet-interface';
+
+// Create a client connected to a Tari base node gRPC service
+const baseNodeClient = new TariBaseNodeGrpcClient('localhost:18141');
+
+// Get chain metadata
+const metadata = await baseNodeClient.getChainMetadata();
+console.log(`Current height: ${metadata.metadata.bestBlock.height}`);
+
+// Close the connection when done
+baseNodeClient.close();
 ```
 
 ### CLI Wallet Client
@@ -76,8 +93,17 @@ await client.finaliseShaAtomicSwap({
 # Install dependencies
 pnpm install
 
+# Build the project
+pnpm build
+
 # Run tests
 pnpm test
+
+# Lint code
+pnpm lint
+
+# Format code
+pnpm format:fix
 ```
 
 ## License
