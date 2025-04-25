@@ -1,8 +1,9 @@
 {
   "scripts": {
-    "compile": "tsc -b ./tsconfig.json",
+    "compile:cjs": "tsc -p ./tsconfig.cjs.json",
+    "compile:esm": "tsc -p ./tsconfig.esm.json",
     "build:clean": "rm -rf ./build",
-    "build": "npm run build:clean && npm run compile && node ./scripts/prepare-package-json.cjs",
+    "build": "npm run build:clean && npm run compile:cjs && npm run compile:esm",
     "test": "vitest run src",
     "lint": "eslint .",
     "format": "prettier --check .",
@@ -17,8 +18,9 @@
   "name": "@krakaw/wallet-interface",
   "version": "0.0.13",
   "description": "Tari Wallet API",
-  "main": "./build/index.js",
-  "types": "./build/index.d.ts",
+  "main": "./build/cjs/index.js",
+  "module": "./build/esm/index.js",
+  "types": "./build/esm/index.d.ts",
   "type": "module",
   "devDependencies": {
     "@eslint/js": "^9.24.0",
