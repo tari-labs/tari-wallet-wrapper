@@ -135,18 +135,9 @@ export class TariWalletGrpcClient implements ITariWalletGrpcClient {
     return stateResponse;
   }
 
-  public async streamTransactionEvents(onData: any, onError: any): Promise<ClientReadableStream<TransactionEventResponse>> {
-    const stateResponse = await new Promise<ClientReadableStream<TransactionEventResponse>>((resolve, reject) => {
-      const stream = this.client.streamTransactionEvents({});
-      stream.on('data', (response: TransactionEventResponse) => {
-        onData(response);
-      });
-      stream.on('error', (error: ServiceError) => {
-        onError(error);
-      });
-      resolve(stream);
-    });
-    return stateResponse;
+  public async streamTransactionEvents(): Promise<ClientReadableStream<TransactionEventResponse>> {
+    return this.client.streamTransactionEvents({});
+    
   }
 
   public async sendShaAtomicSwap(sendRequest: SendShaAtomicSwapRequest): Promise<SendShaAtomicSwapResponse> {
