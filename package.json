@@ -21,7 +21,6 @@
   "main": "./build/cjs/index.js",
   "module": "./build/esm/index.js",
   "types": "./build/esm/index.d.ts",
-  "type": "module",
   "devDependencies": {
     "@eslint/js": "^9.24.0",
     "@types/node": "^22.14.1",
