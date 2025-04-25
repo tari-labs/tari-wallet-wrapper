@@ -8,7 +8,6 @@
     "composite": false,
     "target": "esnext",
     "lib": ["ESNext"],
-    "module": "nodenext",
     "rootDir": "./src",
     "moduleResolution": "node",
     "resolveJsonModule": true,
