@@ -122,6 +122,22 @@ export class TariWalletGrpcClient implements ITariWalletGrpcClient {
     return stateResponse;
   }
 
+
+  public async getPaymentIdAddress(paymentId: string): Promise<GetCompleteAddressResponse> {
+    const stateResponse = await new Promise<GetCompleteAddressResponse>((resolve, reject) => {
+      this.client.getPaymentIdAddress({ payment_id: Buffer.from(paymentId, 'hex') }, (error: ServiceError | null, response: GetCompleteAddressResponse) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(response);
+        }
+      });
+    });
+    return stateResponse;
+  }
+  
+
+
   public async transfer(transferRequest: TransferRequest): Promise<TransferResponse> {
     const stateResponse = await new Promise<TransferResponse>((resolve, reject) => {
       this.client.transfer(transferRequest, (error: ServiceError | null, response: TransferResponse) => {
