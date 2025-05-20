@@ -10,4 +10,4 @@ protoc --plugin=../../node_modules/ts-proto/protoc-gen-ts_proto \
   --ts_proto_opt=outputServices=grpc-js \
   ./base_node.proto ./wallet.proto
 
-mv dist/* ../client/src/
+cp -r dist/* ../client
