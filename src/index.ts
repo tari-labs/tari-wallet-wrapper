@@ -10,5 +10,3 @@ export {
     utils,
     client
 };
-
-

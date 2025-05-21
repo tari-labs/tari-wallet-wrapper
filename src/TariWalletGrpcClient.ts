@@ -96,9 +96,9 @@ export class TariWalletGrpcClient implements ITariWalletGrpcClient {
     return stateResponse;
   }
 
-  public async getBalance(): Promise<GetBalanceResponse> {
+  public async getBalance(paymentId?: any): Promise<GetBalanceResponse> {
     const stateResponse = await new Promise<GetBalanceResponse>((resolve, reject) => {
-      this.client.getBalance({}, (error: ServiceError | null, response: GetBalanceResponse) => {
+      this.client.getBalance({ paymentId }, (error: ServiceError | null, response: GetBalanceResponse) => {
         if (error) {
           reject(error);
         } else {
