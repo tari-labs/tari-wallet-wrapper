@@ -2,7 +2,6 @@
 const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
 export function base58EncodeAddressHex(inputHex: string): string {
-    
     const network = base58Encode(Buffer.from(inputHex.slice(0, 2), "hex"));
     const features = base58Encode(Buffer.from(inputHex.slice(2, 4), "hex"));
     const payload = base58Encode(Buffer.from(inputHex.slice(4), "hex"));
