@@ -1,16 +1,18 @@
 import sqlite3 from 'sqlite3';
-import path from 'path';
+// import path from 'path'; // No longer needed here as path is resolved in config.ts
+import { config } from './config';
 
-const dbPath = path.resolve(__dirname, '..', 'exchange.db');
+// const dbPath = path.resolve(__dirname, '..', 'exchange.db'); // Replaced by config
 
 export function initializeDB(): Promise<sqlite3.Database> {
   return new Promise((resolve, reject) => {
-    const db = new sqlite3.Database(dbPath, (err) => {
+    // Use databaseFilePath from config
+    const db = new sqlite3.Database(config.databaseFilePath, (err) => {
       if (err) {
-        console.error('Error connecting to database:', err.message);
+        console.error(`Error connecting to database at ${config.databaseFilePath}:`, err.message);
         return reject(err);
       }
-      console.log('Connected to the SQLite database.');
+      console.log(`Connected to the SQLite database at ${config.databaseFilePath}.`);
 
       db.serialize(() => {
         // Create users table

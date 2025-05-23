@@ -13,23 +13,22 @@ import {
 } from 'tari-bor/dist/client/wallet'; // Adjusted path
 import Long from 'long';
 import sqlite3 from 'sqlite3';
+import { config } from './config'; // Import config
 
-const TARI_WALLET_GRPC_ADDRESS = 'http://localhost:18143'; // Hardcoded for now
-const DEFAULT_FEE_PER_GRAM = 25; // Default fee per gram for withdrawals
-const PORT = process.env.PORT || 3000;
+// const TARI_WALLET_GRPC_ADDRESS = 'http://localhost:18143'; // Replaced by config
+// const DEFAULT_FEE_PER_GRAM = 25; // Replaced by config
+// const PORT = process.env.PORT || 3000; // Replaced by config
 
 const app = express();
 app.use(express.json());
 
 // Initialize Tari Wallet Client
-// Note: The tari-bor library might have a different way to instantiate the client.
-// This is a placeholder based on common gRPC client patterns.
-// Actual instantiation might require providing credentials or using a factory method.
 let walletClient: TariWalletGrpcClient;
 try {
-    walletClient = new TariWalletGrpcClient(TARI_WALLET_GRPC_ADDRESS);
+    // Use tariWalletGrpcAddress from config
+    walletClient = new TariWalletGrpcClient(config.tariWalletGrpcAddress);
 } catch (error) {
-    console.error('Failed to initialize Tari Wallet Client:', error);
+    console.error(`Failed to initialize Tari Wallet Client at ${config.tariWalletGrpcAddress}:`, error);
     process.exit(1); // Exit if wallet client fails to initialize
 }
 
@@ -89,7 +88,8 @@ initializeDB()
       if (!address || typeof address !== 'string' || address.trim() === '') {
         return res.status(400).json({ error: 'Invalid or missing destination address.' });
       }
-      const fee = feePerGram && typeof feePerGram === 'number' && feePerGram > 0 ? feePerGram : DEFAULT_FEE_PER_GRAM;
+      // Use defaultFeePerGram from config
+      const fee = feePerGram && typeof feePerGram === 'number' && feePerGram > 0 ? feePerGram : config.defaultFeePerGram;
 
       try {
         // 2. Retrieve user and check balance
@@ -252,8 +252,9 @@ initializeDB()
       }
     });
 
-    app.listen(PORT, () => {
-      console.log(`Server is running on http://localhost:${PORT}`);
+    // Use expressServerPort from config
+    app.listen(config.expressServerPort, () => {
+      console.log(`Server is running on http://localhost:${config.expressServerPort}`);
     });
 
   })

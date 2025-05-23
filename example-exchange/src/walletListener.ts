@@ -4,11 +4,17 @@ import { initializeDB } from './database';
 // Path to tari-bor types might need adjustment based on the final project structure
 import { 
     TariWalletGrpcClient,
-} from 'tari-bor/build/esm'; 
+    TransactionEventResponse,
+    TransactionEvent, // This is the type for event.transaction
+    TransactionStatus,
+    TransactionDirection,
+    transactionStatusToJSON,
+    transactionDirectionToJSON
+} from 'tari-bor/dist/client/wallet'; 
 import Long from 'long'; // tari-bor uses Long for amounts
-import { TransactionDirection, transactionDirectionToJSON, TransactionEventResponse, TransactionStatus, transactionStatusToJSON } from '../../build/esm/client/wallet';
+import { config } from './config'; // Import config
 
-const TARI_WALLET_GRPC_ADDRESS = 'http://localhost:18143'; // Or from config
+// const TARI_WALLET_GRPC_ADDRESS = 'http://localhost:18143'; // Replaced by config
 const PAYMENT_ID_ENCODING: BufferEncoding = 'utf-8'; 
 
 let db: sqlite3.Database;
@@ -16,11 +22,11 @@ let walletClient: TariWalletGrpcClient;
 
 async function startWalletListener() {
     try {
-        // Ensure the tari-bor dependency is correctly linked for this path to work
-        walletClient = new TariWalletGrpcClient(TARI_WALLET_GRPC_ADDRESS);
-        console.log('Wallet listener attempting to connect to Tari Wallet gRPC...');
+        // Use tariWalletGrpcAddress from config
+        walletClient = new TariWalletGrpcClient(config.tariWalletGrpcAddress);
+        console.log(`Wallet listener attempting to connect to Tari Wallet gRPC at ${config.tariWalletGrpcAddress}...`);
     } catch (error) {
-        console.error('Failed to initialize Tari Wallet Client for listener:', error);
+        console.error(`Failed to initialize Tari Wallet Client for listener at ${config.tariWalletGrpcAddress}:`, error);
         process.exit(1);
     }
 
@@ -28,9 +34,9 @@ async function startWalletListener() {
     db = await initializeDB();
     console.log('Database initialized for wallet listener.');
 
-    console.log(`Starting Tari Wallet transaction event listener on ${TARI_WALLET_GRPC_ADDRESS}...`);
+    console.log(`Starting Tari Wallet transaction event listener on ${config.tariWalletGrpcAddress}...`);
 
-    const stream = await walletClient.streamTransactionEvents(); 
+    const stream = walletClient.streamTransactionEvents({}); 
 
     stream.on('data', async (eventResponse: TransactionEventResponse) => {
         console.log('[Wallet Event Received]:', JSON.stringify(eventResponse, (key, value) => {
