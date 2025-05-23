@@ -4,14 +4,9 @@ import { initializeDB } from './database';
 // Path to tari-bor types might need adjustment based on the final project structure
 import { 
     TariWalletGrpcClient,
-    TransactionEventResponse,
-    TransactionEvent, // This is the type for event.transaction
-    TransactionStatus,
-    TransactionDirection,
-    transactionStatusToJSON,
-    transactionDirectionToJSON
-} from 'tari-bor/dist/client/wallet'; 
+} from 'tari-bor/build/esm'; 
 import Long from 'long'; // tari-bor uses Long for amounts
+import { TransactionDirection, transactionDirectionToJSON, TransactionEventResponse, TransactionStatus, transactionStatusToJSON } from '../../build/esm/client/wallet';
 
 const TARI_WALLET_GRPC_ADDRESS = 'http://localhost:18143'; // Or from config
 const PAYMENT_ID_ENCODING: BufferEncoding = 'utf-8'; 
@@ -35,7 +30,7 @@ async function startWalletListener() {
 
     console.log(`Starting Tari Wallet transaction event listener on ${TARI_WALLET_GRPC_ADDRESS}...`);
 
-    const stream = walletClient.streamTransactionEvents({}); 
+    const stream = await walletClient.streamTransactionEvents(); 
 
     stream.on('data', async (eventResponse: TransactionEventResponse) => {
         console.log('[Wallet Event Received]:', JSON.stringify(eventResponse, (key, value) => {
