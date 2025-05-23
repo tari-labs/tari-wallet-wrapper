@@ -7,7 +7,7 @@
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 import Long from "long";
-import { AggregateBody } from "./transaction";
+import { AggregateBody } from "./transaction.js";
 
 export const protobufPackage = "tari.rpc";
 

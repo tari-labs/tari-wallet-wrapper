@@ -21,11 +21,11 @@ import {
   type UntypedServiceImplementation,
 } from "@grpc/grpc-js";
 import Long from "long";
-import { Block, BlockHeader, HistoricalBlock, NewBlockTemplate, PowAlgo } from "./block";
-import { ListConnectedPeersResponse, NetworkStatusResponse, NodeIdentity, Peer, SoftwareUpdate } from "./network";
-import { TemplateRegistration } from "./sidechain_types";
-import { OutputFeatures, Transaction, TransactionOutput } from "./transaction";
-import { BlockHeight, ConsensusConstants, Empty, Signature } from "./types";
+import { Block, BlockHeader, HistoricalBlock, NewBlockTemplate, PowAlgo } from "./block.js";
+import { ListConnectedPeersResponse, NetworkStatusResponse, NodeIdentity, Peer, SoftwareUpdate } from "./network.js";
+import { TemplateRegistration } from "./sidechain_types.js";
+import { OutputFeatures, Transaction, TransactionOutput } from "./transaction.js";
+import { BlockHeight, ConsensusConstants, Empty, Signature } from "./types.js";
 
 export const protobufPackage = "tari.rpc";
 

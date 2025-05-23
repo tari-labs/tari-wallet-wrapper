@@ -18,8 +18,8 @@ import {
   GetCompleteAddressResponse,
   GetBlockHeightTransactionsResponse,
   GetBlockHeightTransactionsRequest,
-} from "./client/wallet";
-import { GetIdentityResponse } from "./client/network";
+} from "./client/wallet.js";
+import { GetIdentityResponse } from "./client/network.js";
 import { ClientReadableStream } from "@grpc/grpc-js";
 export interface ITariWalletGrpcClient {
   close(): void;
@@ -127,7 +127,7 @@ export class TariWalletGrpcClient implements ITariWalletGrpcClient {
 
   public async getPaymentIdAddress(paymentId: string): Promise<GetCompleteAddressResponse> {
     const stateResponse = await new Promise<GetCompleteAddressResponse>((resolve, reject) => {
-      this.client.getPaymentIdAddress({ paymentId: Buffer.from(paymentId, 'hex') }, (error: ServiceError | null, response: GetCompleteAddressResponse) => {
+        this.client.getPaymentIdAddress({ paymentId: Buffer.from(paymentId, 'utf8') }, (error: ServiceError | null, response: GetCompleteAddressResponse) => {
         if (error) {
           reject(error);
         } else {

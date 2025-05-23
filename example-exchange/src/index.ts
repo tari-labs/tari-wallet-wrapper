@@ -2,18 +2,19 @@ import express, { Request, Response } from 'express';
 import crypto from 'crypto';
 import { initializeDB } from './database';
 import { 
-    TariWalletGrpcClient, 
     GetPaymentIdAddressRequest, 
-    GetPaymentIdAddressResponse,
     TransferRequest,
     PaymentRecipient,
     // Make sure this enum path is correct based on actual tari-bor structure
     // It might be directly under TariWalletGrpcClient or a sub-module
-    PaymentRecipient_PaymentType 
-} from 'tari-bor/dist/client/wallet'; // Adjusted path
+    PaymentRecipient_PaymentType,
+    GetCompleteAddressResponse
+} from '@krakaw/wallet-interface/build/esm/client/wallet'; // Adjusted path
 import Long from 'long';
 import sqlite3 from 'sqlite3';
 import { config } from './config'; // Import config
+import { TariWalletGrpcClient } from '@krakaw/wallet-interface/build/esm/TariWalletGrpcClient';
+
 
 // const TARI_WALLET_GRPC_ADDRESS = 'http://localhost:18143'; // Replaced by config
 // const DEFAULT_FEE_PER_GRAM = 25; // Replaced by config
@@ -45,13 +46,12 @@ initializeDB()
     app.post('/users', async (req: Request, res: Response) => {
       try {
         const userId = crypto.randomUUID();
-        const paymentId = Buffer.from(userId); // Convert string userId to Buffer for payment_id
 
         // Call wallet to get a new deposit address
-        const paymentIdAddressResponse: GetPaymentIdAddressResponse = await walletClient.getPaymentIdAddress({ payment_id: paymentId });
+        const paymentIdAddressResponse: GetCompleteAddressResponse = await walletClient.getPaymentIdAddress(userId );
         
         // Assuming response.address is a Buffer, convert to hex string for storage/display
-        const depositAddress = paymentIdAddressResponse.address.toString('hex'); 
+        const depositAddress = paymentIdAddressResponse.interactiveAddressBase58;
 
         // Store user in the database
         const insertSql = `INSERT INTO users (user_id, deposit_address) VALUES (?, ?)`;
@@ -125,6 +125,11 @@ initializeDB()
           // Using STANDARD_MIMBLEWIMBLE. Adjust if another type is more appropriate for exchange withdrawals
           paymentType: PaymentRecipient_PaymentType.STANDARD_MIMBLEWIMBLE, 
           rawPaymentId: Buffer.from([]), // Empty or generate if needed for tracking
+          userPaymentId: {
+            utf8String: userId,
+            u256: Buffer.from([]),
+            userBytes: Buffer.from([])
+          }
         };
 
         const transferRequest: TransferRequest = {

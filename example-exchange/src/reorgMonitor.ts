@@ -2,8 +2,8 @@ import sqlite3 from 'sqlite3';
 import Long from 'long';
 import { initializeDB } from './database';
 import {
-    TariWalletGrpcClient,
-    GetBlockHeightTransactionsRequest,
+    GetTransactionInfoRequest,
+    GetTransactionInfoResponse,
     TransactionInfo,
     TransactionStatus,
     transactionStatusToJSON,
@@ -11,8 +11,9 @@ import {
     transactionDirectionToJSON,
     GetStateResponse, // For getState
     // GetBlockHeightTransactionsResponse is implicitly used by the client method
-} from 'tari-bor/dist/client/wallet';
+} from '@krakaw/wallet-interface/build/esm/client/wallet';
 import { config } from './config'; // Import config
+import { TariWalletGrpcClient } from '@krakaw/wallet-interface/build/esm/TariWalletGrpcClient';
 
 // --- Configuration (now from config.ts) ---
 // const TARI_WALLET_GRPC_ADDRESS = 'http://localhost:18143'; // Replaced by config
@@ -38,7 +39,7 @@ async function checkReorgs() {
     console.log('[Reorg Monitor] Starting re-org check cycle...');
     try {
         // 1. Get Current Wallet Scanned Height
-        const stateResponse: GetStateResponse = await walletClient.getState({});
+        const stateResponse: GetStateResponse = await walletClient.getState();
         if (!stateResponse.scannedHeight) {
             console.error('[Reorg Monitor] Could not get scannedHeight from wallet state.');
             return;
@@ -61,7 +62,7 @@ async function checkReorgs() {
                 if (blockTransactionsResponse.transactions) {
                     for (const txInfo of blockTransactionsResponse.transactions) {
                         if (txInfo.txId) {
-                            txIdsInBlock.add(txInfo.txId);
+                            txIdsInBlock.add(txInfo.txId.toString());
                         }
                     }
                 }

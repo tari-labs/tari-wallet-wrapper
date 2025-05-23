@@ -89,6 +89,7 @@ describe('TariWalletGrpcClient', () => {
       expect(result.interactiveAddressBase58).toBeDefined();
       expect(typeof result.interactiveAddressBase58).toBe('string');
       expect(result.interactiveAddressBase58.length).toBeGreaterThan(0);
+
     });
 
   });
@@ -149,7 +150,12 @@ describe('TariWalletGrpcClient', () => {
           amount: Long.fromNumber(1), // 1 Tari
           feePerGram: Long.fromNumber(25),
           paymentType: PaymentRecipient_PaymentType.ONE_SIDED,
-          paymentId: Buffer.from(`wallet-wrapper-test-${Date.now()}`)
+          rawPaymentId: Buffer.from(`wallet-wrapper-test-${Date.now()}`),
+          userPaymentId: {
+            utf8String: `wallet-wrapper-test-${Date.now()}`,
+            u256: Buffer.from([]),
+            userBytes: Buffer.from([])
+          }
         }]
       };
 

@@ -7,7 +7,7 @@
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 import Long from "long";
-import { Signature } from "./types";
+import { Signature } from "./types.js";
 
 export const protobufPackage = "tari.rpc";
 

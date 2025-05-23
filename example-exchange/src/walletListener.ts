@@ -3,16 +3,14 @@ import crypto from 'crypto';
 import { initializeDB } from './database';
 // Path to tari-bor types might need adjustment based on the final project structure
 import { 
-    TariWalletGrpcClient,
-    TransactionEventResponse,
-    TransactionEvent, // This is the type for event.transaction
-    TransactionStatus,
-    TransactionDirection,
-    transactionStatusToJSON,
-    transactionDirectionToJSON
-} from 'tari-bor/dist/client/wallet'; 
+    GetTransactionInfoRequest,
+    GetTransactionInfoResponse,
+    TransactionInfo,
+    TransactionStatus
+} from '@krakaw/wallet-interface/build/esm/client/wallet';
 import Long from 'long'; // tari-bor uses Long for amounts
 import { config } from './config'; // Import config
+import { TariWalletGrpcClient } from '@krakaw/wallet-interface/build/esm/TariWalletGrpcClient';
 
 // const TARI_WALLET_GRPC_ADDRESS = 'http://localhost:18143'; // Replaced by config
 const PAYMENT_ID_ENCODING: BufferEncoding = 'utf-8'; 
@@ -36,9 +34,9 @@ async function startWalletListener() {
 
     console.log(`Starting Tari Wallet transaction event listener on ${config.tariWalletGrpcAddress}...`);
 
-    const stream = walletClient.streamTransactionEvents({}); 
+    const stream = await walletClient.streamTransactionEvents(); 
 
-    stream.on('data', async (eventResponse: TransactionEventResponse) => {
+    stream.on('data', async (eventResponse: GetTransactionInfoResponse) => {
         console.log('[Wallet Event Received]:', JSON.stringify(eventResponse, (key, value) => {
             // Custom replacer to handle Uint8Array and Long for better logging
             if (value && value.type === 'Buffer' && Array.isArray(value.data)) {
@@ -58,8 +56,8 @@ async function startWalletListener() {
         }
 
         // Check status and direction
-        const isMinedConfirmed = transaction.status === transactionStatusToJSON(TransactionStatus.TRANSACTION_STATUS_MINED_CONFIRMED);
-        const isInbound = transaction.direction === transactionDirectionToJSON(TransactionDirection.TRANSACTION_DIRECTION_INBOUND);
+        const isMinedConfirmed = transaction.status === TransactionStatus.TRANSACTION_STATUS_MINED_CONFIRMED;
+        const isInbound = transaction.direction === TransactionDirection.TRANSACTION_DIRECTION_INBOUND;
 
         if (isMinedConfirmed && isInbound) {
             const paymentIdBytes = transaction.paymentId; // This is Uint8Array

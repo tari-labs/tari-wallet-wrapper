@@ -12,7 +12,7 @@ const getEnvAsInt = (key: string, defaultValue: number): number => {
 
 export const config = {
   // Tari Wallet gRPC address
-  tariWalletGrpcAddress: process.env.TARI_WALLET_GRPC_ADDRESS || 'http://localhost:18143',
+  tariWalletGrpcAddress: process.env.TARI_WALLET_GRPC_ADDRESS || 'localhost:18143',
 
   // Express server port
   expressServerPort: getEnvAsInt('EXPRESS_SERVER_PORT', 3000),

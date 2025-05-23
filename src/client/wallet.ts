@@ -27,10 +27,10 @@ import {
   ListConnectedPeersResponse,
   NetworkStatusResponse,
   SoftwareUpdate,
-} from "./network";
-import { TemplateRegistration } from "./sidechain_types";
-import { UnblindedOutput } from "./transaction";
-import { BlockHeight, CommitmentSignature, Empty, Signature } from "./types";
+} from "./network.js";
+import { TemplateRegistration } from "./sidechain_types.js";
+import { UnblindedOutput } from "./transaction.js";
+import { BlockHeight, CommitmentSignature, Empty, Signature } from "./types.js";
 
 export const protobufPackage = "tari.rpc";
 
