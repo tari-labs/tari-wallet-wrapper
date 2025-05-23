@@ -457,14 +457,16 @@ export interface NetworkDifficultyResponse {
   timestamp: Long;
   powAlgo: Long;
   sha3xEstimatedHashRate: Long;
-  randomxEstimatedHashRate: Long;
+  moneroRandomxEstimatedHashRate: Long;
+  tariRandomxEstimatedHashRate: Long;
   numCoinbases: Long;
   coinbaseExtras: Uint8Array[];
 }
 
 /** A generic single value response for a specific height */
 export interface ValueAtHeightResponse {
-  value: Long;
+  circulatingSupply: Long;
+  spendableSupply: Long;
   height: Long;
 }
 
@@ -615,6 +617,7 @@ export interface GetNewBlockResult {
   mergeMiningHash: Uint8Array;
   tariUniqueId: Uint8Array;
   minerData: MinerData | undefined;
+  vmKey: Uint8Array;
 }
 
 /** This is the message that is returned for a miner after it asks for a new block. */
@@ -758,7 +761,8 @@ export interface GetNetworkStateResponse {
   /** estimate sha3x hash rate */
   sha3xEstimatedHashRate: Long;
   /** estimate randomx hash rate */
-  randomxEstimatedHashRate: Long;
+  moneroRandomxEstimatedHashRate: Long;
+  tariRandomxEstimatedHashRate: Long;
   /** number of connections */
   numConnections: Long;
   /** liveness results */
@@ -2236,7 +2240,8 @@ function createBaseNetworkDifficultyResponse(): NetworkDifficultyResponse {
     timestamp: Long.UZERO,
     powAlgo: Long.UZERO,
     sha3xEstimatedHashRate: Long.UZERO,
-    randomxEstimatedHashRate: Long.UZERO,
+    moneroRandomxEstimatedHashRate: Long.UZERO,
+    tariRandomxEstimatedHashRate: Long.UZERO,
     numCoinbases: Long.UZERO,
     coinbaseExtras: [],
   };
@@ -2262,8 +2267,11 @@ export const NetworkDifficultyResponse: MessageFns<NetworkDifficultyResponse> = 
     if (!message.sha3xEstimatedHashRate.equals(Long.UZERO)) {
       writer.uint32(48).uint64(message.sha3xEstimatedHashRate.toString());
     }
-    if (!message.randomxEstimatedHashRate.equals(Long.UZERO)) {
-      writer.uint32(56).uint64(message.randomxEstimatedHashRate.toString());
+    if (!message.moneroRandomxEstimatedHashRate.equals(Long.UZERO)) {
+      writer.uint32(56).uint64(message.moneroRandomxEstimatedHashRate.toString());
+    }
+    if (!message.tariRandomxEstimatedHashRate.equals(Long.UZERO)) {
+      writer.uint32(80).uint64(message.tariRandomxEstimatedHashRate.toString());
     }
     if (!message.numCoinbases.equals(Long.UZERO)) {
       writer.uint32(64).uint64(message.numCoinbases.toString());
@@ -2334,7 +2342,15 @@ export const NetworkDifficultyResponse: MessageFns<NetworkDifficultyResponse> = 
             break;
           }
 
-          message.randomxEstimatedHashRate = Long.fromString(reader.uint64().toString(), true);
+          message.moneroRandomxEstimatedHashRate = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.tariRandomxEstimatedHashRate = Long.fromString(reader.uint64().toString(), true);
           continue;
         }
         case 8: {
@@ -2372,8 +2388,11 @@ export const NetworkDifficultyResponse: MessageFns<NetworkDifficultyResponse> = 
       sha3xEstimatedHashRate: isSet(object.sha3xEstimatedHashRate)
         ? Long.fromValue(object.sha3xEstimatedHashRate)
         : Long.UZERO,
-      randomxEstimatedHashRate: isSet(object.randomxEstimatedHashRate)
-        ? Long.fromValue(object.randomxEstimatedHashRate)
+      moneroRandomxEstimatedHashRate: isSet(object.moneroRandomxEstimatedHashRate)
+        ? Long.fromValue(object.moneroRandomxEstimatedHashRate)
+        : Long.UZERO,
+      tariRandomxEstimatedHashRate: isSet(object.tariRandomxEstimatedHashRate)
+        ? Long.fromValue(object.tariRandomxEstimatedHashRate)
         : Long.UZERO,
       numCoinbases: isSet(object.numCoinbases) ? Long.fromValue(object.numCoinbases) : Long.UZERO,
       coinbaseExtras: globalThis.Array.isArray(object?.coinbaseExtras)
@@ -2402,8 +2421,11 @@ export const NetworkDifficultyResponse: MessageFns<NetworkDifficultyResponse> = 
     if (!message.sha3xEstimatedHashRate.equals(Long.UZERO)) {
       obj.sha3xEstimatedHashRate = (message.sha3xEstimatedHashRate || Long.UZERO).toString();
     }
-    if (!message.randomxEstimatedHashRate.equals(Long.UZERO)) {
-      obj.randomxEstimatedHashRate = (message.randomxEstimatedHashRate || Long.UZERO).toString();
+    if (!message.moneroRandomxEstimatedHashRate.equals(Long.UZERO)) {
+      obj.moneroRandomxEstimatedHashRate = (message.moneroRandomxEstimatedHashRate || Long.UZERO).toString();
+    }
+    if (!message.tariRandomxEstimatedHashRate.equals(Long.UZERO)) {
+      obj.tariRandomxEstimatedHashRate = (message.tariRandomxEstimatedHashRate || Long.UZERO).toString();
     }
     if (!message.numCoinbases.equals(Long.UZERO)) {
       obj.numCoinbases = (message.numCoinbases || Long.UZERO).toString();
@@ -2438,9 +2460,13 @@ export const NetworkDifficultyResponse: MessageFns<NetworkDifficultyResponse> = 
       (object.sha3xEstimatedHashRate !== undefined && object.sha3xEstimatedHashRate !== null)
         ? Long.fromValue(object.sha3xEstimatedHashRate)
         : Long.UZERO;
-    message.randomxEstimatedHashRate =
-      (object.randomxEstimatedHashRate !== undefined && object.randomxEstimatedHashRate !== null)
-        ? Long.fromValue(object.randomxEstimatedHashRate)
+    message.moneroRandomxEstimatedHashRate =
+      (object.moneroRandomxEstimatedHashRate !== undefined && object.moneroRandomxEstimatedHashRate !== null)
+        ? Long.fromValue(object.moneroRandomxEstimatedHashRate)
+        : Long.UZERO;
+    message.tariRandomxEstimatedHashRate =
+      (object.tariRandomxEstimatedHashRate !== undefined && object.tariRandomxEstimatedHashRate !== null)
+        ? Long.fromValue(object.tariRandomxEstimatedHashRate)
         : Long.UZERO;
     message.numCoinbases = (object.numCoinbases !== undefined && object.numCoinbases !== null)
       ? Long.fromValue(object.numCoinbases)
@@ -2451,16 +2477,19 @@ export const NetworkDifficultyResponse: MessageFns<NetworkDifficultyResponse> = 
 };
 
 function createBaseValueAtHeightResponse(): ValueAtHeightResponse {
-  return { value: Long.UZERO, height: Long.UZERO };
+  return { circulatingSupply: Long.UZERO, spendableSupply: Long.UZERO, height: Long.UZERO };
 }
 
 export const ValueAtHeightResponse: MessageFns<ValueAtHeightResponse> = {
   encode(message: ValueAtHeightResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (!message.value.equals(Long.UZERO)) {
-      writer.uint32(8).uint64(message.value.toString());
+    if (!message.circulatingSupply.equals(Long.UZERO)) {
+      writer.uint32(8).uint64(message.circulatingSupply.toString());
+    }
+    if (!message.spendableSupply.equals(Long.UZERO)) {
+      writer.uint32(16).uint64(message.spendableSupply.toString());
     }
     if (!message.height.equals(Long.UZERO)) {
-      writer.uint32(16).uint64(message.height.toString());
+      writer.uint32(24).uint64(message.height.toString());
     }
     return writer;
   },
@@ -2477,11 +2506,19 @@ export const ValueAtHeightResponse: MessageFns<ValueAtHeightResponse> = {
             break;
           }
 
-          message.value = Long.fromString(reader.uint64().toString(), true);
+          message.circulatingSupply = Long.fromString(reader.uint64().toString(), true);
           continue;
         }
         case 2: {
           if (tag !== 16) {
+            break;
+          }
+
+          message.spendableSupply = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
             break;
           }
 
@@ -2499,15 +2536,19 @@ export const ValueAtHeightResponse: MessageFns<ValueAtHeightResponse> = {
 
   fromJSON(object: any): ValueAtHeightResponse {
     return {
-      value: isSet(object.value) ? Long.fromValue(object.value) : Long.UZERO,
+      circulatingSupply: isSet(object.circulatingSupply) ? Long.fromValue(object.circulatingSupply) : Long.UZERO,
+      spendableSupply: isSet(object.spendableSupply) ? Long.fromValue(object.spendableSupply) : Long.UZERO,
       height: isSet(object.height) ? Long.fromValue(object.height) : Long.UZERO,
     };
   },
 
   toJSON(message: ValueAtHeightResponse): unknown {
     const obj: any = {};
-    if (!message.value.equals(Long.UZERO)) {
-      obj.value = (message.value || Long.UZERO).toString();
+    if (!message.circulatingSupply.equals(Long.UZERO)) {
+      obj.circulatingSupply = (message.circulatingSupply || Long.UZERO).toString();
+    }
+    if (!message.spendableSupply.equals(Long.UZERO)) {
+      obj.spendableSupply = (message.spendableSupply || Long.UZERO).toString();
     }
     if (!message.height.equals(Long.UZERO)) {
       obj.height = (message.height || Long.UZERO).toString();
@@ -2520,7 +2561,12 @@ export const ValueAtHeightResponse: MessageFns<ValueAtHeightResponse> = {
   },
   fromPartial<I extends Exact<DeepPartial<ValueAtHeightResponse>, I>>(object: I): ValueAtHeightResponse {
     const message = createBaseValueAtHeightResponse();
-    message.value = (object.value !== undefined && object.value !== null) ? Long.fromValue(object.value) : Long.UZERO;
+    message.circulatingSupply = (object.circulatingSupply !== undefined && object.circulatingSupply !== null)
+      ? Long.fromValue(object.circulatingSupply)
+      : Long.UZERO;
+    message.spendableSupply = (object.spendableSupply !== undefined && object.spendableSupply !== null)
+      ? Long.fromValue(object.spendableSupply)
+      : Long.UZERO;
     message.height = (object.height !== undefined && object.height !== null)
       ? Long.fromValue(object.height)
       : Long.UZERO;
@@ -3838,6 +3884,7 @@ function createBaseGetNewBlockResult(): GetNewBlockResult {
     mergeMiningHash: new Uint8Array(0),
     tariUniqueId: new Uint8Array(0),
     minerData: undefined,
+    vmKey: new Uint8Array(0),
   };
 }
 
@@ -3857,6 +3904,9 @@ export const GetNewBlockResult: MessageFns<GetNewBlockResult> = {
     }
     if (message.minerData !== undefined) {
       MinerData.encode(message.minerData, writer.uint32(42).fork()).join();
+    }
+    if (message.vmKey.length !== 0) {
+      writer.uint32(50).bytes(message.vmKey);
     }
     return writer;
   },
@@ -3908,6 +3958,14 @@ export const GetNewBlockResult: MessageFns<GetNewBlockResult> = {
           message.minerData = MinerData.decode(reader, reader.uint32());
           continue;
         }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.vmKey = reader.bytes();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -3924,6 +3982,7 @@ export const GetNewBlockResult: MessageFns<GetNewBlockResult> = {
       mergeMiningHash: isSet(object.mergeMiningHash) ? bytesFromBase64(object.mergeMiningHash) : new Uint8Array(0),
       tariUniqueId: isSet(object.tariUniqueId) ? bytesFromBase64(object.tariUniqueId) : new Uint8Array(0),
       minerData: isSet(object.minerData) ? MinerData.fromJSON(object.minerData) : undefined,
+      vmKey: isSet(object.vmKey) ? bytesFromBase64(object.vmKey) : new Uint8Array(0),
     };
   },
 
@@ -3944,6 +4003,9 @@ export const GetNewBlockResult: MessageFns<GetNewBlockResult> = {
     if (message.minerData !== undefined) {
       obj.minerData = MinerData.toJSON(message.minerData);
     }
+    if (message.vmKey.length !== 0) {
+      obj.vmKey = base64FromBytes(message.vmKey);
+    }
     return obj;
   },
 
@@ -3959,6 +4021,7 @@ export const GetNewBlockResult: MessageFns<GetNewBlockResult> = {
     message.minerData = (object.minerData !== undefined && object.minerData !== null)
       ? MinerData.fromPartial(object.minerData)
       : undefined;
+    message.vmKey = object.vmKey ?? new Uint8Array(0);
     return message;
   },
 };
@@ -5761,7 +5824,8 @@ function createBaseGetNetworkStateResponse(): GetNetworkStateResponse {
     failedCheckpoints: false,
     reward: Long.UZERO,
     sha3xEstimatedHashRate: Long.UZERO,
-    randomxEstimatedHashRate: Long.UZERO,
+    moneroRandomxEstimatedHashRate: Long.UZERO,
+    tariRandomxEstimatedHashRate: Long.UZERO,
     numConnections: Long.UZERO,
     livenessResults: [],
   };
@@ -5787,8 +5851,11 @@ export const GetNetworkStateResponse: MessageFns<GetNetworkStateResponse> = {
     if (!message.sha3xEstimatedHashRate.equals(Long.UZERO)) {
       writer.uint32(48).uint64(message.sha3xEstimatedHashRate.toString());
     }
-    if (!message.randomxEstimatedHashRate.equals(Long.UZERO)) {
-      writer.uint32(56).uint64(message.randomxEstimatedHashRate.toString());
+    if (!message.moneroRandomxEstimatedHashRate.equals(Long.UZERO)) {
+      writer.uint32(56).uint64(message.moneroRandomxEstimatedHashRate.toString());
+    }
+    if (!message.tariRandomxEstimatedHashRate.equals(Long.UZERO)) {
+      writer.uint32(80).uint64(message.tariRandomxEstimatedHashRate.toString());
     }
     if (!message.numConnections.equals(Long.UZERO)) {
       writer.uint32(64).uint64(message.numConnections.toString());
@@ -5859,7 +5926,15 @@ export const GetNetworkStateResponse: MessageFns<GetNetworkStateResponse> = {
             break;
           }
 
-          message.randomxEstimatedHashRate = Long.fromString(reader.uint64().toString(), true);
+          message.moneroRandomxEstimatedHashRate = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.tariRandomxEstimatedHashRate = Long.fromString(reader.uint64().toString(), true);
           continue;
         }
         case 8: {
@@ -5897,8 +5972,11 @@ export const GetNetworkStateResponse: MessageFns<GetNetworkStateResponse> = {
       sha3xEstimatedHashRate: isSet(object.sha3xEstimatedHashRate)
         ? Long.fromValue(object.sha3xEstimatedHashRate)
         : Long.UZERO,
-      randomxEstimatedHashRate: isSet(object.randomxEstimatedHashRate)
-        ? Long.fromValue(object.randomxEstimatedHashRate)
+      moneroRandomxEstimatedHashRate: isSet(object.moneroRandomxEstimatedHashRate)
+        ? Long.fromValue(object.moneroRandomxEstimatedHashRate)
+        : Long.UZERO,
+      tariRandomxEstimatedHashRate: isSet(object.tariRandomxEstimatedHashRate)
+        ? Long.fromValue(object.tariRandomxEstimatedHashRate)
         : Long.UZERO,
       numConnections: isSet(object.numConnections) ? Long.fromValue(object.numConnections) : Long.UZERO,
       livenessResults: globalThis.Array.isArray(object?.livenessResults)
@@ -5927,8 +6005,11 @@ export const GetNetworkStateResponse: MessageFns<GetNetworkStateResponse> = {
     if (!message.sha3xEstimatedHashRate.equals(Long.UZERO)) {
       obj.sha3xEstimatedHashRate = (message.sha3xEstimatedHashRate || Long.UZERO).toString();
     }
-    if (!message.randomxEstimatedHashRate.equals(Long.UZERO)) {
-      obj.randomxEstimatedHashRate = (message.randomxEstimatedHashRate || Long.UZERO).toString();
+    if (!message.moneroRandomxEstimatedHashRate.equals(Long.UZERO)) {
+      obj.moneroRandomxEstimatedHashRate = (message.moneroRandomxEstimatedHashRate || Long.UZERO).toString();
+    }
+    if (!message.tariRandomxEstimatedHashRate.equals(Long.UZERO)) {
+      obj.tariRandomxEstimatedHashRate = (message.tariRandomxEstimatedHashRate || Long.UZERO).toString();
     }
     if (!message.numConnections.equals(Long.UZERO)) {
       obj.numConnections = (message.numConnections || Long.UZERO).toString();
@@ -5957,9 +6038,13 @@ export const GetNetworkStateResponse: MessageFns<GetNetworkStateResponse> = {
       (object.sha3xEstimatedHashRate !== undefined && object.sha3xEstimatedHashRate !== null)
         ? Long.fromValue(object.sha3xEstimatedHashRate)
         : Long.UZERO;
-    message.randomxEstimatedHashRate =
-      (object.randomxEstimatedHashRate !== undefined && object.randomxEstimatedHashRate !== null)
-        ? Long.fromValue(object.randomxEstimatedHashRate)
+    message.moneroRandomxEstimatedHashRate =
+      (object.moneroRandomxEstimatedHashRate !== undefined && object.moneroRandomxEstimatedHashRate !== null)
+        ? Long.fromValue(object.moneroRandomxEstimatedHashRate)
+        : Long.UZERO;
+    message.tariRandomxEstimatedHashRate =
+      (object.tariRandomxEstimatedHashRate !== undefined && object.tariRandomxEstimatedHashRate !== null)
+        ? Long.fromValue(object.tariRandomxEstimatedHashRate)
         : Long.UZERO;
     message.numConnections = (object.numConnections !== undefined && object.numConnections !== null)
       ? Long.fromValue(object.numConnections)

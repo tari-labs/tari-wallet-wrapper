@@ -16,6 +16,8 @@ import {
   ClaimShaAtomicSwapRequest,
   ClaimShaAtomicSwapResponse,
   GetCompleteAddressResponse,
+  GetBlockHeightTransactionsResponse,
+  GetBlockHeightTransactionsRequest,
 } from "./client/wallet";
 import { GetIdentityResponse } from "./client/network";
 import { ClientReadableStream } from "@grpc/grpc-js";
@@ -141,6 +143,19 @@ export class TariWalletGrpcClient implements ITariWalletGrpcClient {
   public async transfer(transferRequest: TransferRequest): Promise<TransferResponse> {
     const stateResponse = await new Promise<TransferResponse>((resolve, reject) => {
       this.client.transfer(transferRequest, (error: ServiceError | null, response: TransferResponse) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(response);
+        }
+      });
+    });
+    return stateResponse;
+  }
+
+  public async getBlockHeightTransactions(request: GetBlockHeightTransactionsRequest): Promise<GetBlockHeightTransactionsResponse> {
+    const stateResponse = await new Promise<GetBlockHeightTransactionsResponse>((resolve, reject) => {
+      this.client.getBlockHeightTransactions(request, (error: ServiceError | null, response: GetBlockHeightTransactionsResponse) => {
         if (error) {
           reject(error);
         } else {

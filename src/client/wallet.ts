@@ -281,8 +281,10 @@ export interface PaymentRecipient {
   feePerGram: Long;
   /** The type of payment to perform. */
   paymentType: PaymentRecipient_PaymentType;
-  /** Optional encrypted payment ID for reference (max 256 bytes). */
-  paymentId: Uint8Array;
+  /** raw payment id */
+  rawPaymentId: Uint8Array;
+  /** Optional user encrypted payment ID for reference (max 256 bytes). */
+  userPaymentId: UserPaymentId | undefined;
 }
 
 export enum PaymentRecipient_PaymentType {
@@ -394,8 +396,9 @@ export interface TransactionInfo {
   isCancelled: boolean;
   excessSig: Uint8Array;
   timestamp: Long;
-  paymentId: Uint8Array;
+  rawPaymentId: Uint8Array;
   minedInBlockHeight: Long;
+  userPaymentId: Uint8Array;
 }
 
 export interface GetCompletedTransactionsRequest {
@@ -615,6 +618,25 @@ export interface RegisterValidatorNodeResponse {
   transactionId: Long;
   isSuccess: boolean;
   failureMessage: string;
+}
+
+export interface ImportTransactionsRequest {
+  txs: string;
+}
+
+export interface ImportTransactionsResponse {
+  txIds: Long[];
+}
+
+/** Request message for getting transactions at a specific block height */
+export interface GetBlockHeightTransactionsRequest {
+  /** The block height to fetch transactions for */
+  blockHeight: Long;
+}
+
+export interface GetBlockHeightTransactionsResponse {
+  /** List of transactions mined at the specified block height */
+  transactions: TransactionInfo[];
 }
 
 function createBaseGetVersionRequest(): GetVersionRequest {
@@ -1247,7 +1269,14 @@ export const CreateBurnTransactionRequest: MessageFns<CreateBurnTransactionReque
 };
 
 function createBasePaymentRecipient(): PaymentRecipient {
-  return { address: "", amount: Long.UZERO, feePerGram: Long.UZERO, paymentType: 0, paymentId: new Uint8Array(0) };
+  return {
+    address: "",
+    amount: Long.UZERO,
+    feePerGram: Long.UZERO,
+    paymentType: 0,
+    rawPaymentId: new Uint8Array(0),
+    userPaymentId: undefined,
+  };
 }
 
 export const PaymentRecipient: MessageFns<PaymentRecipient> = {
@@ -1264,8 +1293,11 @@ export const PaymentRecipient: MessageFns<PaymentRecipient> = {
     if (message.paymentType !== 0) {
       writer.uint32(40).int32(message.paymentType);
     }
-    if (message.paymentId.length !== 0) {
-      writer.uint32(50).bytes(message.paymentId);
+    if (message.rawPaymentId.length !== 0) {
+      writer.uint32(50).bytes(message.rawPaymentId);
+    }
+    if (message.userPaymentId !== undefined) {
+      UserPaymentId.encode(message.userPaymentId, writer.uint32(58).fork()).join();
     }
     return writer;
   },
@@ -1314,7 +1346,15 @@ export const PaymentRecipient: MessageFns<PaymentRecipient> = {
             break;
           }
 
-          message.paymentId = reader.bytes();
+          message.rawPaymentId = reader.bytes();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.userPaymentId = UserPaymentId.decode(reader, reader.uint32());
           continue;
         }
       }
@@ -1332,7 +1372,8 @@ export const PaymentRecipient: MessageFns<PaymentRecipient> = {
       amount: isSet(object.amount) ? Long.fromValue(object.amount) : Long.UZERO,
       feePerGram: isSet(object.feePerGram) ? Long.fromValue(object.feePerGram) : Long.UZERO,
       paymentType: isSet(object.paymentType) ? paymentRecipient_PaymentTypeFromJSON(object.paymentType) : 0,
-      paymentId: isSet(object.paymentId) ? bytesFromBase64(object.paymentId) : new Uint8Array(0),
+      rawPaymentId: isSet(object.rawPaymentId) ? bytesFromBase64(object.rawPaymentId) : new Uint8Array(0),
+      userPaymentId: isSet(object.userPaymentId) ? UserPaymentId.fromJSON(object.userPaymentId) : undefined,
     };
   },
 
@@ -1350,8 +1391,11 @@ export const PaymentRecipient: MessageFns<PaymentRecipient> = {
     if (message.paymentType !== 0) {
       obj.paymentType = paymentRecipient_PaymentTypeToJSON(message.paymentType);
     }
-    if (message.paymentId.length !== 0) {
-      obj.paymentId = base64FromBytes(message.paymentId);
+    if (message.rawPaymentId.length !== 0) {
+      obj.rawPaymentId = base64FromBytes(message.rawPaymentId);
+    }
+    if (message.userPaymentId !== undefined) {
+      obj.userPaymentId = UserPaymentId.toJSON(message.userPaymentId);
     }
     return obj;
   },
@@ -1369,7 +1413,10 @@ export const PaymentRecipient: MessageFns<PaymentRecipient> = {
       ? Long.fromValue(object.feePerGram)
       : Long.UZERO;
     message.paymentType = object.paymentType ?? 0;
-    message.paymentId = object.paymentId ?? new Uint8Array(0);
+    message.rawPaymentId = object.rawPaymentId ?? new Uint8Array(0);
+    message.userPaymentId = (object.userPaymentId !== undefined && object.userPaymentId !== null)
+      ? UserPaymentId.fromPartial(object.userPaymentId)
+      : undefined;
     return message;
   },
 };
@@ -2284,8 +2331,9 @@ function createBaseTransactionInfo(): TransactionInfo {
     isCancelled: false,
     excessSig: new Uint8Array(0),
     timestamp: Long.UZERO,
-    paymentId: new Uint8Array(0),
+    rawPaymentId: new Uint8Array(0),
     minedInBlockHeight: Long.UZERO,
+    userPaymentId: new Uint8Array(0),
   };
 }
 
@@ -2321,11 +2369,14 @@ export const TransactionInfo: MessageFns<TransactionInfo> = {
     if (!message.timestamp.equals(Long.UZERO)) {
       writer.uint32(80).uint64(message.timestamp.toString());
     }
-    if (message.paymentId.length !== 0) {
-      writer.uint32(98).bytes(message.paymentId);
+    if (message.rawPaymentId.length !== 0) {
+      writer.uint32(98).bytes(message.rawPaymentId);
     }
     if (!message.minedInBlockHeight.equals(Long.UZERO)) {
       writer.uint32(104).uint64(message.minedInBlockHeight.toString());
+    }
+    if (message.userPaymentId.length !== 0) {
+      writer.uint32(114).bytes(message.userPaymentId);
     }
     return writer;
   },
@@ -2422,7 +2473,7 @@ export const TransactionInfo: MessageFns<TransactionInfo> = {
             break;
           }
 
-          message.paymentId = reader.bytes();
+          message.rawPaymentId = reader.bytes();
           continue;
         }
         case 13: {
@@ -2431,6 +2482,14 @@ export const TransactionInfo: MessageFns<TransactionInfo> = {
           }
 
           message.minedInBlockHeight = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 14: {
+          if (tag !== 114) {
+            break;
+          }
+
+          message.userPaymentId = reader.bytes();
           continue;
         }
       }
@@ -2454,8 +2513,9 @@ export const TransactionInfo: MessageFns<TransactionInfo> = {
       isCancelled: isSet(object.isCancelled) ? globalThis.Boolean(object.isCancelled) : false,
       excessSig: isSet(object.excessSig) ? bytesFromBase64(object.excessSig) : new Uint8Array(0),
       timestamp: isSet(object.timestamp) ? Long.fromValue(object.timestamp) : Long.UZERO,
-      paymentId: isSet(object.paymentId) ? bytesFromBase64(object.paymentId) : new Uint8Array(0),
+      rawPaymentId: isSet(object.rawPaymentId) ? bytesFromBase64(object.rawPaymentId) : new Uint8Array(0),
       minedInBlockHeight: isSet(object.minedInBlockHeight) ? Long.fromValue(object.minedInBlockHeight) : Long.UZERO,
+      userPaymentId: isSet(object.userPaymentId) ? bytesFromBase64(object.userPaymentId) : new Uint8Array(0),
     };
   },
 
@@ -2491,11 +2551,14 @@ export const TransactionInfo: MessageFns<TransactionInfo> = {
     if (!message.timestamp.equals(Long.UZERO)) {
       obj.timestamp = (message.timestamp || Long.UZERO).toString();
     }
-    if (message.paymentId.length !== 0) {
-      obj.paymentId = base64FromBytes(message.paymentId);
+    if (message.rawPaymentId.length !== 0) {
+      obj.rawPaymentId = base64FromBytes(message.rawPaymentId);
     }
     if (!message.minedInBlockHeight.equals(Long.UZERO)) {
       obj.minedInBlockHeight = (message.minedInBlockHeight || Long.UZERO).toString();
+    }
+    if (message.userPaymentId.length !== 0) {
+      obj.userPaymentId = base64FromBytes(message.userPaymentId);
     }
     return obj;
   },
@@ -2519,10 +2582,11 @@ export const TransactionInfo: MessageFns<TransactionInfo> = {
     message.timestamp = (object.timestamp !== undefined && object.timestamp !== null)
       ? Long.fromValue(object.timestamp)
       : Long.UZERO;
-    message.paymentId = object.paymentId ?? new Uint8Array(0);
+    message.rawPaymentId = object.rawPaymentId ?? new Uint8Array(0);
     message.minedInBlockHeight = (object.minedInBlockHeight !== undefined && object.minedInBlockHeight !== null)
       ? Long.fromValue(object.minedInBlockHeight)
       : Long.UZERO;
+    message.userPaymentId = object.userPaymentId ?? new Uint8Array(0);
     return message;
   },
 };
@@ -4779,6 +4843,264 @@ export const RegisterValidatorNodeResponse: MessageFns<RegisterValidatorNodeResp
   },
 };
 
+function createBaseImportTransactionsRequest(): ImportTransactionsRequest {
+  return { txs: "" };
+}
+
+export const ImportTransactionsRequest: MessageFns<ImportTransactionsRequest> = {
+  encode(message: ImportTransactionsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.txs !== "") {
+      writer.uint32(10).string(message.txs);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ImportTransactionsRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseImportTransactionsRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.txs = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ImportTransactionsRequest {
+    return { txs: isSet(object.txs) ? globalThis.String(object.txs) : "" };
+  },
+
+  toJSON(message: ImportTransactionsRequest): unknown {
+    const obj: any = {};
+    if (message.txs !== "") {
+      obj.txs = message.txs;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ImportTransactionsRequest>, I>>(base?: I): ImportTransactionsRequest {
+    return ImportTransactionsRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ImportTransactionsRequest>, I>>(object: I): ImportTransactionsRequest {
+    const message = createBaseImportTransactionsRequest();
+    message.txs = object.txs ?? "";
+    return message;
+  },
+};
+
+function createBaseImportTransactionsResponse(): ImportTransactionsResponse {
+  return { txIds: [] };
+}
+
+export const ImportTransactionsResponse: MessageFns<ImportTransactionsResponse> = {
+  encode(message: ImportTransactionsResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    writer.uint32(10).fork();
+    for (const v of message.txIds) {
+      writer.uint64(v.toString());
+    }
+    writer.join();
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ImportTransactionsResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseImportTransactionsResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag === 8) {
+            message.txIds.push(Long.fromString(reader.uint64().toString(), true));
+
+            continue;
+          }
+
+          if (tag === 10) {
+            const end2 = reader.uint32() + reader.pos;
+            while (reader.pos < end2) {
+              message.txIds.push(Long.fromString(reader.uint64().toString(), true));
+            }
+
+            continue;
+          }
+
+          break;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ImportTransactionsResponse {
+    return { txIds: globalThis.Array.isArray(object?.txIds) ? object.txIds.map((e: any) => Long.fromValue(e)) : [] };
+  },
+
+  toJSON(message: ImportTransactionsResponse): unknown {
+    const obj: any = {};
+    if (message.txIds?.length) {
+      obj.txIds = message.txIds.map((e) => (e || Long.UZERO).toString());
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ImportTransactionsResponse>, I>>(base?: I): ImportTransactionsResponse {
+    return ImportTransactionsResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ImportTransactionsResponse>, I>>(object: I): ImportTransactionsResponse {
+    const message = createBaseImportTransactionsResponse();
+    message.txIds = object.txIds?.map((e) => Long.fromValue(e)) || [];
+    return message;
+  },
+};
+
+function createBaseGetBlockHeightTransactionsRequest(): GetBlockHeightTransactionsRequest {
+  return { blockHeight: Long.UZERO };
+}
+
+export const GetBlockHeightTransactionsRequest: MessageFns<GetBlockHeightTransactionsRequest> = {
+  encode(message: GetBlockHeightTransactionsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (!message.blockHeight.equals(Long.UZERO)) {
+      writer.uint32(8).uint64(message.blockHeight.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetBlockHeightTransactionsRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetBlockHeightTransactionsRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.blockHeight = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GetBlockHeightTransactionsRequest {
+    return { blockHeight: isSet(object.blockHeight) ? Long.fromValue(object.blockHeight) : Long.UZERO };
+  },
+
+  toJSON(message: GetBlockHeightTransactionsRequest): unknown {
+    const obj: any = {};
+    if (!message.blockHeight.equals(Long.UZERO)) {
+      obj.blockHeight = (message.blockHeight || Long.UZERO).toString();
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<GetBlockHeightTransactionsRequest>, I>>(
+    base?: I,
+  ): GetBlockHeightTransactionsRequest {
+    return GetBlockHeightTransactionsRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GetBlockHeightTransactionsRequest>, I>>(
+    object: I,
+  ): GetBlockHeightTransactionsRequest {
+    const message = createBaseGetBlockHeightTransactionsRequest();
+    message.blockHeight = (object.blockHeight !== undefined && object.blockHeight !== null)
+      ? Long.fromValue(object.blockHeight)
+      : Long.UZERO;
+    return message;
+  },
+};
+
+function createBaseGetBlockHeightTransactionsResponse(): GetBlockHeightTransactionsResponse {
+  return { transactions: [] };
+}
+
+export const GetBlockHeightTransactionsResponse: MessageFns<GetBlockHeightTransactionsResponse> = {
+  encode(message: GetBlockHeightTransactionsResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.transactions) {
+      TransactionInfo.encode(v!, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetBlockHeightTransactionsResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetBlockHeightTransactionsResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.transactions.push(TransactionInfo.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GetBlockHeightTransactionsResponse {
+    return {
+      transactions: globalThis.Array.isArray(object?.transactions)
+        ? object.transactions.map((e: any) => TransactionInfo.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: GetBlockHeightTransactionsResponse): unknown {
+    const obj: any = {};
+    if (message.transactions?.length) {
+      obj.transactions = message.transactions.map((e) => TransactionInfo.toJSON(e));
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<GetBlockHeightTransactionsResponse>, I>>(
+    base?: I,
+  ): GetBlockHeightTransactionsResponse {
+    return GetBlockHeightTransactionsResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GetBlockHeightTransactionsResponse>, I>>(
+    object: I,
+  ): GetBlockHeightTransactionsResponse {
+    const message = createBaseGetBlockHeightTransactionsResponse();
+    message.transactions = object.transactions?.map((e) => TransactionInfo.fromPartial(e)) || [];
+    return message;
+  },
+};
+
 /** The gRPC interface for interacting with the wallet. */
 export type WalletService = typeof WalletService;
 export const WalletService = {
@@ -4875,8 +5197,8 @@ export const WalletService = {
   /**
    * The `Identify` RPC call returns the identity information of the wallet node.
    * This includes:
-   * - **Public Key**: The wallet’s cryptographic public key.
-   * - **Public Address**: The wallet’s public address used to receive funds.
+   * - **Public Key**: The wallet's cryptographic public key.
+   * - **Public Address**: The wallet's public address used to receive funds.
    * - **Node ID**: The unique identifier of the wallet node in the network.
    *
    * Example usage (JavaScript):
@@ -5066,7 +5388,6 @@ export const WalletService = {
    *     }
    *   ]
    * }
-   * ```
    */
   transfer: {
     path: "/tari.rpc.Wallet/Transfer",
@@ -5125,7 +5446,6 @@ export const WalletService = {
    *     }
    *   ]
    * }
-   * ```
    */
   getTransactionInfo: {
     path: "/tari.rpc.Wallet/GetTransactionInfo",
@@ -5186,6 +5506,67 @@ export const WalletService = {
     responseSerialize: (value: GetCompletedTransactionsResponse) =>
       Buffer.from(GetCompletedTransactionsResponse.encode(value).finish()),
     responseDeserialize: (value: Buffer) => GetCompletedTransactionsResponse.decode(value),
+  },
+  /**
+   * Returns all transactions that were mined at a specific block height.
+   *
+   * The `GetBlockHeightTransactions` call retrieves all wallet transactions that were mined
+   * at the specified block height. The response includes all transactions in a single response,
+   * with each transaction including details such as status, direction, amount,
+   * fees, and associated metadata.
+   *
+   * ### Request Parameters:
+   *
+   * - `block_height` (required):
+   *   - **Type**: `uint64`
+   *   - **Description**: The specific block height to fetch transactions for.
+   *   - **Restrictions**:
+   *     - Must be a valid block height (greater than 0).
+   *     - If the block height is beyond the current chain height, no transactions will be returned.
+   *
+   * ### Example JavaScript gRPC client usage:
+   *
+   * ```javascript
+   * const request = {
+   *   block_height: 1523493
+   * };
+   * const response = await client.getBlockHeightTransactions(request);
+   * console.log(response.transactions);
+   * ```
+   *
+   * ### Sample JSON Response:
+   *
+   * ```json
+   * {
+   *   "transactions": [
+   *     {
+   *       "tx_id": 12345,
+   *       "source_address": "0x1234abcd...",
+   *       "dest_address": "0x5678efgh...",
+   *       "status": "TRANSACTION_STATUS_MINED_CONFIRMED",
+   *       "direction": "TRANSACTION_DIRECTION_INBOUND",
+   *       "amount": 500000,
+   *       "fee": 20,
+   *       "is_cancelled": false,
+   *       "excess_sig": "0xabcdef...",
+   *       "timestamp": 1681234567,
+   *       "payment_id": "0xdeadbeef...",
+   *       "mined_in_block_height": 1523493
+   *     }
+   *   ]
+   * }
+   * ```
+   */
+  getBlockHeightTransactions: {
+    path: "/tari.rpc.Wallet/GetBlockHeightTransactions",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: GetBlockHeightTransactionsRequest) =>
+      Buffer.from(GetBlockHeightTransactionsRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer) => GetBlockHeightTransactionsRequest.decode(value),
+    responseSerialize: (value: GetBlockHeightTransactionsResponse) =>
+      Buffer.from(GetBlockHeightTransactionsResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer) => GetBlockHeightTransactionsResponse.decode(value),
   },
   /**
    * Returns the wallet balance details.
@@ -5405,7 +5786,7 @@ export const WalletService = {
   /**
    * Returns the wallet's current network connectivity status.
    *
-   * The `GetNetworkStatus` call provides a snapshot of the wallet’s connection to the Tari network,
+   * The `GetNetworkStatus` call provides a snapshot of the wallet's connection to the Tari network,
    * including whether it is online, the number of active peer connections, and the average latency
    * to the configured base node.
    *
@@ -5720,7 +6101,7 @@ export const WalletService = {
    *
    * The `ClaimShaAtomicSwapTransaction` call allows the user to unlock and claim funds from
    * a hash-time-locked contract (HTLC) by supplying the correct pre-image that matches a
-   * previously committed SHA-256 hash. This pre-image proves the user’s knowledge of the
+   * previously committed SHA-256 hash. This pre-image proves the user's knowledge of the
    * secret required to spend the output.
    *
    * ### Request Parameters:
@@ -5932,6 +6313,17 @@ export const WalletService = {
       Buffer.from(RegisterValidatorNodeResponse.encode(value).finish()),
     responseDeserialize: (value: Buffer) => RegisterValidatorNodeResponse.decode(value),
   },
+  importTransactions: {
+    path: "/tari.rpc.Wallet/ImportTransactions",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: ImportTransactionsRequest) =>
+      Buffer.from(ImportTransactionsRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer) => ImportTransactionsRequest.decode(value),
+    responseSerialize: (value: ImportTransactionsResponse) =>
+      Buffer.from(ImportTransactionsResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer) => ImportTransactionsResponse.decode(value),
+  },
 } as const;
 
 export interface WalletServer extends UntypedServiceImplementation {
@@ -5995,8 +6387,8 @@ export interface WalletServer extends UntypedServiceImplementation {
   /**
    * The `Identify` RPC call returns the identity information of the wallet node.
    * This includes:
-   * - **Public Key**: The wallet’s cryptographic public key.
-   * - **Public Address**: The wallet’s public address used to receive funds.
+   * - **Public Key**: The wallet's cryptographic public key.
+   * - **Public Address**: The wallet's public address used to receive funds.
    * - **Node ID**: The unique identifier of the wallet node in the network.
    *
    * Example usage (JavaScript):
@@ -6151,7 +6543,6 @@ export interface WalletServer extends UntypedServiceImplementation {
    *     }
    *   ]
    * }
-   * ```
    */
   transfer: handleUnaryCall<TransferRequest, TransferResponse>;
   /**
@@ -6202,7 +6593,6 @@ export interface WalletServer extends UntypedServiceImplementation {
    *     }
    *   ]
    * }
-   * ```
    */
   getTransactionInfo: handleUnaryCall<GetTransactionInfoRequest, GetTransactionInfoResponse>;
   /**
@@ -6247,6 +6637,57 @@ export interface WalletServer extends UntypedServiceImplementation {
     GetCompletedTransactionsRequest,
     GetCompletedTransactionsResponse
   >;
+  /**
+   * Returns all transactions that were mined at a specific block height.
+   *
+   * The `GetBlockHeightTransactions` call retrieves all wallet transactions that were mined
+   * at the specified block height. The response includes all transactions in a single response,
+   * with each transaction including details such as status, direction, amount,
+   * fees, and associated metadata.
+   *
+   * ### Request Parameters:
+   *
+   * - `block_height` (required):
+   *   - **Type**: `uint64`
+   *   - **Description**: The specific block height to fetch transactions for.
+   *   - **Restrictions**:
+   *     - Must be a valid block height (greater than 0).
+   *     - If the block height is beyond the current chain height, no transactions will be returned.
+   *
+   * ### Example JavaScript gRPC client usage:
+   *
+   * ```javascript
+   * const request = {
+   *   block_height: 1523493
+   * };
+   * const response = await client.getBlockHeightTransactions(request);
+   * console.log(response.transactions);
+   * ```
+   *
+   * ### Sample JSON Response:
+   *
+   * ```json
+   * {
+   *   "transactions": [
+   *     {
+   *       "tx_id": 12345,
+   *       "source_address": "0x1234abcd...",
+   *       "dest_address": "0x5678efgh...",
+   *       "status": "TRANSACTION_STATUS_MINED_CONFIRMED",
+   *       "direction": "TRANSACTION_DIRECTION_INBOUND",
+   *       "amount": 500000,
+   *       "fee": 20,
+   *       "is_cancelled": false,
+   *       "excess_sig": "0xabcdef...",
+   *       "timestamp": 1681234567,
+   *       "payment_id": "0xdeadbeef...",
+   *       "mined_in_block_height": 1523493
+   *     }
+   *   ]
+   * }
+   * ```
+   */
+  getBlockHeightTransactions: handleUnaryCall<GetBlockHeightTransactionsRequest, GetBlockHeightTransactionsResponse>;
   /**
    * Returns the wallet balance details.
    *
@@ -6432,7 +6873,7 @@ export interface WalletServer extends UntypedServiceImplementation {
   /**
    * Returns the wallet's current network connectivity status.
    *
-   * The `GetNetworkStatus` call provides a snapshot of the wallet’s connection to the Tari network,
+   * The `GetNetworkStatus` call provides a snapshot of the wallet's connection to the Tari network,
    * including whether it is online, the number of active peer connections, and the average latency
    * to the configured base node.
    *
@@ -6686,7 +7127,7 @@ export interface WalletServer extends UntypedServiceImplementation {
    *
    * The `ClaimShaAtomicSwapTransaction` call allows the user to unlock and claim funds from
    * a hash-time-locked contract (HTLC) by supplying the correct pre-image that matches a
-   * previously committed SHA-256 hash. This pre-image proves the user’s knowledge of the
+   * previously committed SHA-256 hash. This pre-image proves the user's knowledge of the
    * secret required to spend the output.
    *
    * ### Request Parameters:
@@ -6843,6 +7284,7 @@ export interface WalletServer extends UntypedServiceImplementation {
    */
   streamTransactionEvents: handleServerStreamingCall<TransactionEventRequest, TransactionEventResponse>;
   registerValidatorNode: handleUnaryCall<RegisterValidatorNodeRequest, RegisterValidatorNodeResponse>;
+  importTransactions: handleUnaryCall<ImportTransactionsRequest, ImportTransactionsResponse>;
 }
 
 export interface WalletClient extends Client {
@@ -6962,8 +7404,8 @@ export interface WalletClient extends Client {
   /**
    * The `Identify` RPC call returns the identity information of the wallet node.
    * This includes:
-   * - **Public Key**: The wallet’s cryptographic public key.
-   * - **Public Address**: The wallet’s public address used to receive funds.
+   * - **Public Key**: The wallet's cryptographic public key.
+   * - **Public Address**: The wallet's public address used to receive funds.
    * - **Node ID**: The unique identifier of the wallet node in the network.
    *
    * Example usage (JavaScript):
@@ -7174,7 +7616,6 @@ export interface WalletClient extends Client {
    *     }
    *   ]
    * }
-   * ```
    */
   transfer(
     request: TransferRequest,
@@ -7239,7 +7680,6 @@ export interface WalletClient extends Client {
    *     }
    *   ]
    * }
-   * ```
    */
   getTransactionInfo(
     request: GetTransactionInfoRequest,
@@ -7303,6 +7743,71 @@ export interface WalletClient extends Client {
     metadata?: Metadata,
     options?: Partial<CallOptions>,
   ): ClientReadableStream<GetCompletedTransactionsResponse>;
+  /**
+   * Returns all transactions that were mined at a specific block height.
+   *
+   * The `GetBlockHeightTransactions` call retrieves all wallet transactions that were mined
+   * at the specified block height. The response includes all transactions in a single response,
+   * with each transaction including details such as status, direction, amount,
+   * fees, and associated metadata.
+   *
+   * ### Request Parameters:
+   *
+   * - `block_height` (required):
+   *   - **Type**: `uint64`
+   *   - **Description**: The specific block height to fetch transactions for.
+   *   - **Restrictions**:
+   *     - Must be a valid block height (greater than 0).
+   *     - If the block height is beyond the current chain height, no transactions will be returned.
+   *
+   * ### Example JavaScript gRPC client usage:
+   *
+   * ```javascript
+   * const request = {
+   *   block_height: 1523493
+   * };
+   * const response = await client.getBlockHeightTransactions(request);
+   * console.log(response.transactions);
+   * ```
+   *
+   * ### Sample JSON Response:
+   *
+   * ```json
+   * {
+   *   "transactions": [
+   *     {
+   *       "tx_id": 12345,
+   *       "source_address": "0x1234abcd...",
+   *       "dest_address": "0x5678efgh...",
+   *       "status": "TRANSACTION_STATUS_MINED_CONFIRMED",
+   *       "direction": "TRANSACTION_DIRECTION_INBOUND",
+   *       "amount": 500000,
+   *       "fee": 20,
+   *       "is_cancelled": false,
+   *       "excess_sig": "0xabcdef...",
+   *       "timestamp": 1681234567,
+   *       "payment_id": "0xdeadbeef...",
+   *       "mined_in_block_height": 1523493
+   *     }
+   *   ]
+   * }
+   * ```
+   */
+  getBlockHeightTransactions(
+    request: GetBlockHeightTransactionsRequest,
+    callback: (error: ServiceError | null, response: GetBlockHeightTransactionsResponse) => void,
+  ): ClientUnaryCall;
+  getBlockHeightTransactions(
+    request: GetBlockHeightTransactionsRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: GetBlockHeightTransactionsResponse) => void,
+  ): ClientUnaryCall;
+  getBlockHeightTransactions(
+    request: GetBlockHeightTransactionsRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: GetBlockHeightTransactionsResponse) => void,
+  ): ClientUnaryCall;
   /**
    * Returns the wallet balance details.
    *
@@ -7544,7 +8049,7 @@ export interface WalletClient extends Client {
   /**
    * Returns the wallet's current network connectivity status.
    *
-   * The `GetNetworkStatus` call provides a snapshot of the wallet’s connection to the Tari network,
+   * The `GetNetworkStatus` call provides a snapshot of the wallet's connection to the Tari network,
    * including whether it is online, the number of active peer connections, and the average latency
    * to the configured base node.
    *
@@ -7896,7 +8401,7 @@ export interface WalletClient extends Client {
    *
    * The `ClaimShaAtomicSwapTransaction` call allows the user to unlock and claim funds from
    * a hash-time-locked contract (HTLC) by supplying the correct pre-image that matches a
-   * previously committed SHA-256 hash. This pre-image proves the user’s knowledge of the
+   * previously committed SHA-256 hash. This pre-image proves the user's knowledge of the
    * secret required to spend the output.
    *
    * ### Request Parameters:
@@ -8130,6 +8635,21 @@ export interface WalletClient extends Client {
     metadata: Metadata,
     options: Partial<CallOptions>,
     callback: (error: ServiceError | null, response: RegisterValidatorNodeResponse) => void,
+  ): ClientUnaryCall;
+  importTransactions(
+    request: ImportTransactionsRequest,
+    callback: (error: ServiceError | null, response: ImportTransactionsResponse) => void,
+  ): ClientUnaryCall;
+  importTransactions(
+    request: ImportTransactionsRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: ImportTransactionsResponse) => void,
+  ): ClientUnaryCall;
+  importTransactions(
+    request: ImportTransactionsRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: ImportTransactionsResponse) => void,
   ): ClientUnaryCall;
 }
 

@@ -104,21 +104,26 @@ export interface PowAlgo {
 
 /** The permitted pow algorithms */
 export enum PowAlgo_PowAlgos {
-  /** POW_ALGOS_RANDOMX - Accessible as `grpc::pow_algo::PowAlgos::Randomx` */
-  POW_ALGOS_RANDOMX = 0,
+  /** POW_ALGOS_RANDOMXM - Accessible as `grpc::pow_algo::PowAlgos::RandomxM` */
+  POW_ALGOS_RANDOMXM = 0,
   /** POW_ALGOS_SHA3X - Accessible as `grpc::pow_algo::PowAlgos::Sha3x` */
   POW_ALGOS_SHA3X = 1,
+  /** POW_ALGOS_RANDOMXT - Accessible as `grpc::pow_algo::PowAlgos::RandomxT` */
+  POW_ALGOS_RANDOMXT = 2,
   UNRECOGNIZED = -1,
 }
 
 export function powAlgo_PowAlgosFromJSON(object: any): PowAlgo_PowAlgos {
   switch (object) {
     case 0:
-    case "POW_ALGOS_RANDOMX":
-      return PowAlgo_PowAlgos.POW_ALGOS_RANDOMX;
+    case "POW_ALGOS_RANDOMXM":
+      return PowAlgo_PowAlgos.POW_ALGOS_RANDOMXM;
     case 1:
     case "POW_ALGOS_SHA3X":
       return PowAlgo_PowAlgos.POW_ALGOS_SHA3X;
+    case 2:
+    case "POW_ALGOS_RANDOMXT":
+      return PowAlgo_PowAlgos.POW_ALGOS_RANDOMXT;
     case -1:
     case "UNRECOGNIZED":
     default:
@@ -128,10 +133,12 @@ export function powAlgo_PowAlgosFromJSON(object: any): PowAlgo_PowAlgos {
 
 export function powAlgo_PowAlgosToJSON(object: PowAlgo_PowAlgos): string {
   switch (object) {
-    case PowAlgo_PowAlgos.POW_ALGOS_RANDOMX:
-      return "POW_ALGOS_RANDOMX";
+    case PowAlgo_PowAlgos.POW_ALGOS_RANDOMXM:
+      return "POW_ALGOS_RANDOMXM";
     case PowAlgo_PowAlgos.POW_ALGOS_SHA3X:
       return "POW_ALGOS_SHA3X";
+    case PowAlgo_PowAlgos.POW_ALGOS_RANDOMXT:
+      return "POW_ALGOS_RANDOMXT";
     case PowAlgo_PowAlgos.UNRECOGNIZED:
     default:
       return "UNRECOGNIZED";
