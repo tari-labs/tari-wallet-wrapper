@@ -6,7 +6,8 @@ import {
     GetTransactionInfoRequest,
     GetTransactionInfoResponse,
     TransactionInfo,
-    TransactionStatus
+    TransactionStatus,
+    TransactionDirection
 } from '@krakaw/wallet-interface/build/esm/client/wallet';
 import Long from 'long'; // tari-bor uses Long for amounts
 import { config } from './config'; // Import config
@@ -47,14 +48,17 @@ async function startWalletListener() {
             }
             return value;
         }, 2));
+        console.log(eventResponse)
 
-        const transaction = eventResponse.transaction;
+        const transactions =  eventResponse.transactions[0] as any;
 
-        if (!transaction) {
+
+        if (!transactions || !transactions.length) {
             console.warn('[Wallet Event] Received event response without a transaction object. Skipping.', eventResponse);
             return;
         }
 
+        const transaction = transactions[0]; // TODO: Handle multiple transactions
         // Check status and direction
         const isMinedConfirmed = transaction.status === TransactionStatus.TRANSACTION_STATUS_MINED_CONFIRMED;
         const isInbound = transaction.direction === TransactionDirection.TRANSACTION_DIRECTION_INBOUND;
