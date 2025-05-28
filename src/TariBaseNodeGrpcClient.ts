@@ -1,11 +1,12 @@
 import { ChannelCredentials, ServiceError } from "@grpc/grpc-js";
 
-import { BaseNodeClient, TipInfoResponse } from "./client/base_node.js";
+import { BaseNodeClient, TipInfoResponse, ValueAtHeightResponse, GetBlocksRequest } from "./client/base_node.js";
 import { Empty } from "./client/types.js";
 
 export interface ITariBaseNodeGrpcClient {
   close(): void;
   getTipInfo(): Promise<TipInfoResponse>;
+  getTokensInCirculation(): AsyncIterable<ValueAtHeightResponse>;
 }
 
 export class TariBaseNodeGrpcClient implements ITariBaseNodeGrpcClient {
@@ -30,6 +31,15 @@ export class TariBaseNodeGrpcClient implements ITariBaseNodeGrpcClient {
       });
     });
     return tipInfo;
+  }
+
+  public async *getTokensInCirculation(heights: number[] = []): AsyncIterable<ValueAtHeightResponse> {
+    const request = GetBlocksRequest.create({ heights });
+    const stream = this.client.getTokensInCirculation(request);
+    
+    for await (const response of stream) {
+      yield response;
+    }
   }
 }
 
