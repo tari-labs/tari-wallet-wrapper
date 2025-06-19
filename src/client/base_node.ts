@@ -465,9 +465,15 @@ export interface NetworkDifficultyResponse {
 
 /** A generic single value response for a specific height */
 export interface ValueAtHeightResponse {
-  circulatingSupply: Long;
-  spendableSupply: Long;
+  /**
+   * uint64 circulating_supply = 1;    // No longer used
+   * uint64 spendable_supply = 2;      // No longer used
+   */
   height: Long;
+  minedRewards: Long;
+  spendableRewards: Long;
+  spendablePreMine: Long;
+  totalSpendable: Long;
 }
 
 /** A generic uint value */
@@ -776,6 +782,37 @@ export interface LivenessResult {
   discoverLatency: Long;
   /** Dial latency */
   pingLatency: Long;
+}
+
+/** Request to search for outputs by payment reference */
+export interface SearchPaymentReferencesRequest {
+  /** Payment reference as hex string (64 characters) */
+  paymentReferenceHex: string[];
+  paymentReferenceBytes: Uint8Array[];
+  /** Optional: include spent outputs in results */
+  includeSpent: boolean;
+}
+
+/** Response containing payment reference match */
+export interface PaymentReferenceResponse {
+  /** The payment reference that was found */
+  paymentReferenceHex: string;
+  /** Block height where the output was mined */
+  blockHeight: Long;
+  /** Block hash where the output was mined */
+  blockHash: Uint8Array;
+  /** Timestamp when the output was mined */
+  minedTimestamp: Long;
+  /** Output commitment (32 bytes) */
+  commitment: Uint8Array;
+  /** Whether this output has been spent */
+  isSpent: boolean;
+  /** Height where output was spent (if spent) */
+  spentHeight: Long;
+  /** Block hash where output was spent (if spent) */
+  spentBlockHash: Uint8Array;
+  /** Transaction output amount will be 0 for non set a */
+  minValuePromise: Long;
 }
 
 function createBaseGetAssetMetadataRequest(): GetAssetMetadataRequest {
@@ -2477,19 +2514,31 @@ export const NetworkDifficultyResponse: MessageFns<NetworkDifficultyResponse> = 
 };
 
 function createBaseValueAtHeightResponse(): ValueAtHeightResponse {
-  return { circulatingSupply: Long.UZERO, spendableSupply: Long.UZERO, height: Long.UZERO };
+  return {
+    height: Long.UZERO,
+    minedRewards: Long.UZERO,
+    spendableRewards: Long.UZERO,
+    spendablePreMine: Long.UZERO,
+    totalSpendable: Long.UZERO,
+  };
 }
 
 export const ValueAtHeightResponse: MessageFns<ValueAtHeightResponse> = {
   encode(message: ValueAtHeightResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (!message.circulatingSupply.equals(Long.UZERO)) {
-      writer.uint32(8).uint64(message.circulatingSupply.toString());
-    }
-    if (!message.spendableSupply.equals(Long.UZERO)) {
-      writer.uint32(16).uint64(message.spendableSupply.toString());
-    }
     if (!message.height.equals(Long.UZERO)) {
       writer.uint32(24).uint64(message.height.toString());
+    }
+    if (!message.minedRewards.equals(Long.UZERO)) {
+      writer.uint32(32).uint64(message.minedRewards.toString());
+    }
+    if (!message.spendableRewards.equals(Long.UZERO)) {
+      writer.uint32(40).uint64(message.spendableRewards.toString());
+    }
+    if (!message.spendablePreMine.equals(Long.UZERO)) {
+      writer.uint32(48).uint64(message.spendablePreMine.toString());
+    }
+    if (!message.totalSpendable.equals(Long.UZERO)) {
+      writer.uint32(56).uint64(message.totalSpendable.toString());
     }
     return writer;
   },
@@ -2501,28 +2550,44 @@ export const ValueAtHeightResponse: MessageFns<ValueAtHeightResponse> = {
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
-        case 1: {
-          if (tag !== 8) {
-            break;
-          }
-
-          message.circulatingSupply = Long.fromString(reader.uint64().toString(), true);
-          continue;
-        }
-        case 2: {
-          if (tag !== 16) {
-            break;
-          }
-
-          message.spendableSupply = Long.fromString(reader.uint64().toString(), true);
-          continue;
-        }
         case 3: {
           if (tag !== 24) {
             break;
           }
 
           message.height = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.minedRewards = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.spendableRewards = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.spendablePreMine = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.totalSpendable = Long.fromString(reader.uint64().toString(), true);
           continue;
         }
       }
@@ -2536,22 +2601,30 @@ export const ValueAtHeightResponse: MessageFns<ValueAtHeightResponse> = {
 
   fromJSON(object: any): ValueAtHeightResponse {
     return {
-      circulatingSupply: isSet(object.circulatingSupply) ? Long.fromValue(object.circulatingSupply) : Long.UZERO,
-      spendableSupply: isSet(object.spendableSupply) ? Long.fromValue(object.spendableSupply) : Long.UZERO,
       height: isSet(object.height) ? Long.fromValue(object.height) : Long.UZERO,
+      minedRewards: isSet(object.minedRewards) ? Long.fromValue(object.minedRewards) : Long.UZERO,
+      spendableRewards: isSet(object.spendableRewards) ? Long.fromValue(object.spendableRewards) : Long.UZERO,
+      spendablePreMine: isSet(object.spendablePreMine) ? Long.fromValue(object.spendablePreMine) : Long.UZERO,
+      totalSpendable: isSet(object.totalSpendable) ? Long.fromValue(object.totalSpendable) : Long.UZERO,
     };
   },
 
   toJSON(message: ValueAtHeightResponse): unknown {
     const obj: any = {};
-    if (!message.circulatingSupply.equals(Long.UZERO)) {
-      obj.circulatingSupply = (message.circulatingSupply || Long.UZERO).toString();
-    }
-    if (!message.spendableSupply.equals(Long.UZERO)) {
-      obj.spendableSupply = (message.spendableSupply || Long.UZERO).toString();
-    }
     if (!message.height.equals(Long.UZERO)) {
       obj.height = (message.height || Long.UZERO).toString();
+    }
+    if (!message.minedRewards.equals(Long.UZERO)) {
+      obj.minedRewards = (message.minedRewards || Long.UZERO).toString();
+    }
+    if (!message.spendableRewards.equals(Long.UZERO)) {
+      obj.spendableRewards = (message.spendableRewards || Long.UZERO).toString();
+    }
+    if (!message.spendablePreMine.equals(Long.UZERO)) {
+      obj.spendablePreMine = (message.spendablePreMine || Long.UZERO).toString();
+    }
+    if (!message.totalSpendable.equals(Long.UZERO)) {
+      obj.totalSpendable = (message.totalSpendable || Long.UZERO).toString();
     }
     return obj;
   },
@@ -2561,14 +2634,20 @@ export const ValueAtHeightResponse: MessageFns<ValueAtHeightResponse> = {
   },
   fromPartial<I extends Exact<DeepPartial<ValueAtHeightResponse>, I>>(object: I): ValueAtHeightResponse {
     const message = createBaseValueAtHeightResponse();
-    message.circulatingSupply = (object.circulatingSupply !== undefined && object.circulatingSupply !== null)
-      ? Long.fromValue(object.circulatingSupply)
-      : Long.UZERO;
-    message.spendableSupply = (object.spendableSupply !== undefined && object.spendableSupply !== null)
-      ? Long.fromValue(object.spendableSupply)
-      : Long.UZERO;
     message.height = (object.height !== undefined && object.height !== null)
       ? Long.fromValue(object.height)
+      : Long.UZERO;
+    message.minedRewards = (object.minedRewards !== undefined && object.minedRewards !== null)
+      ? Long.fromValue(object.minedRewards)
+      : Long.UZERO;
+    message.spendableRewards = (object.spendableRewards !== undefined && object.spendableRewards !== null)
+      ? Long.fromValue(object.spendableRewards)
+      : Long.UZERO;
+    message.spendablePreMine = (object.spendablePreMine !== undefined && object.spendablePreMine !== null)
+      ? Long.fromValue(object.spendablePreMine)
+      : Long.UZERO;
+    message.totalSpendable = (object.totalSpendable !== undefined && object.totalSpendable !== null)
+      ? Long.fromValue(object.totalSpendable)
       : Long.UZERO;
     return message;
   },
@@ -6150,6 +6229,310 @@ export const LivenessResult: MessageFns<LivenessResult> = {
   },
 };
 
+function createBaseSearchPaymentReferencesRequest(): SearchPaymentReferencesRequest {
+  return { paymentReferenceHex: [], paymentReferenceBytes: [], includeSpent: false };
+}
+
+export const SearchPaymentReferencesRequest: MessageFns<SearchPaymentReferencesRequest> = {
+  encode(message: SearchPaymentReferencesRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.paymentReferenceHex) {
+      writer.uint32(10).string(v!);
+    }
+    for (const v of message.paymentReferenceBytes) {
+      writer.uint32(18).bytes(v!);
+    }
+    if (message.includeSpent !== false) {
+      writer.uint32(24).bool(message.includeSpent);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SearchPaymentReferencesRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSearchPaymentReferencesRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.paymentReferenceHex.push(reader.string());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.paymentReferenceBytes.push(reader.bytes());
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.includeSpent = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SearchPaymentReferencesRequest {
+    return {
+      paymentReferenceHex: globalThis.Array.isArray(object?.paymentReferenceHex)
+        ? object.paymentReferenceHex.map((e: any) => globalThis.String(e))
+        : [],
+      paymentReferenceBytes: globalThis.Array.isArray(object?.paymentReferenceBytes)
+        ? object.paymentReferenceBytes.map((e: any) => bytesFromBase64(e))
+        : [],
+      includeSpent: isSet(object.includeSpent) ? globalThis.Boolean(object.includeSpent) : false,
+    };
+  },
+
+  toJSON(message: SearchPaymentReferencesRequest): unknown {
+    const obj: any = {};
+    if (message.paymentReferenceHex?.length) {
+      obj.paymentReferenceHex = message.paymentReferenceHex;
+    }
+    if (message.paymentReferenceBytes?.length) {
+      obj.paymentReferenceBytes = message.paymentReferenceBytes.map((e) => base64FromBytes(e));
+    }
+    if (message.includeSpent !== false) {
+      obj.includeSpent = message.includeSpent;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<SearchPaymentReferencesRequest>, I>>(base?: I): SearchPaymentReferencesRequest {
+    return SearchPaymentReferencesRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SearchPaymentReferencesRequest>, I>>(
+    object: I,
+  ): SearchPaymentReferencesRequest {
+    const message = createBaseSearchPaymentReferencesRequest();
+    message.paymentReferenceHex = object.paymentReferenceHex?.map((e) => e) || [];
+    message.paymentReferenceBytes = object.paymentReferenceBytes?.map((e) => e) || [];
+    message.includeSpent = object.includeSpent ?? false;
+    return message;
+  },
+};
+
+function createBasePaymentReferenceResponse(): PaymentReferenceResponse {
+  return {
+    paymentReferenceHex: "",
+    blockHeight: Long.UZERO,
+    blockHash: new Uint8Array(0),
+    minedTimestamp: Long.UZERO,
+    commitment: new Uint8Array(0),
+    isSpent: false,
+    spentHeight: Long.UZERO,
+    spentBlockHash: new Uint8Array(0),
+    minValuePromise: Long.UZERO,
+  };
+}
+
+export const PaymentReferenceResponse: MessageFns<PaymentReferenceResponse> = {
+  encode(message: PaymentReferenceResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.paymentReferenceHex !== "") {
+      writer.uint32(10).string(message.paymentReferenceHex);
+    }
+    if (!message.blockHeight.equals(Long.UZERO)) {
+      writer.uint32(16).uint64(message.blockHeight.toString());
+    }
+    if (message.blockHash.length !== 0) {
+      writer.uint32(26).bytes(message.blockHash);
+    }
+    if (!message.minedTimestamp.equals(Long.UZERO)) {
+      writer.uint32(32).uint64(message.minedTimestamp.toString());
+    }
+    if (message.commitment.length !== 0) {
+      writer.uint32(42).bytes(message.commitment);
+    }
+    if (message.isSpent !== false) {
+      writer.uint32(48).bool(message.isSpent);
+    }
+    if (!message.spentHeight.equals(Long.UZERO)) {
+      writer.uint32(56).uint64(message.spentHeight.toString());
+    }
+    if (message.spentBlockHash.length !== 0) {
+      writer.uint32(66).bytes(message.spentBlockHash);
+    }
+    if (!message.minValuePromise.equals(Long.UZERO)) {
+      writer.uint32(72).uint64(message.minValuePromise.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PaymentReferenceResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBasePaymentReferenceResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.paymentReferenceHex = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.blockHeight = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.blockHash = reader.bytes();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.minedTimestamp = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.commitment = reader.bytes();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.isSpent = reader.bool();
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.spentHeight = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.spentBlockHash = reader.bytes();
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.minValuePromise = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): PaymentReferenceResponse {
+    return {
+      paymentReferenceHex: isSet(object.paymentReferenceHex) ? globalThis.String(object.paymentReferenceHex) : "",
+      blockHeight: isSet(object.blockHeight) ? Long.fromValue(object.blockHeight) : Long.UZERO,
+      blockHash: isSet(object.blockHash) ? bytesFromBase64(object.blockHash) : new Uint8Array(0),
+      minedTimestamp: isSet(object.minedTimestamp) ? Long.fromValue(object.minedTimestamp) : Long.UZERO,
+      commitment: isSet(object.commitment) ? bytesFromBase64(object.commitment) : new Uint8Array(0),
+      isSpent: isSet(object.isSpent) ? globalThis.Boolean(object.isSpent) : false,
+      spentHeight: isSet(object.spentHeight) ? Long.fromValue(object.spentHeight) : Long.UZERO,
+      spentBlockHash: isSet(object.spentBlockHash) ? bytesFromBase64(object.spentBlockHash) : new Uint8Array(0),
+      minValuePromise: isSet(object.minValuePromise) ? Long.fromValue(object.minValuePromise) : Long.UZERO,
+    };
+  },
+
+  toJSON(message: PaymentReferenceResponse): unknown {
+    const obj: any = {};
+    if (message.paymentReferenceHex !== "") {
+      obj.paymentReferenceHex = message.paymentReferenceHex;
+    }
+    if (!message.blockHeight.equals(Long.UZERO)) {
+      obj.blockHeight = (message.blockHeight || Long.UZERO).toString();
+    }
+    if (message.blockHash.length !== 0) {
+      obj.blockHash = base64FromBytes(message.blockHash);
+    }
+    if (!message.minedTimestamp.equals(Long.UZERO)) {
+      obj.minedTimestamp = (message.minedTimestamp || Long.UZERO).toString();
+    }
+    if (message.commitment.length !== 0) {
+      obj.commitment = base64FromBytes(message.commitment);
+    }
+    if (message.isSpent !== false) {
+      obj.isSpent = message.isSpent;
+    }
+    if (!message.spentHeight.equals(Long.UZERO)) {
+      obj.spentHeight = (message.spentHeight || Long.UZERO).toString();
+    }
+    if (message.spentBlockHash.length !== 0) {
+      obj.spentBlockHash = base64FromBytes(message.spentBlockHash);
+    }
+    if (!message.minValuePromise.equals(Long.UZERO)) {
+      obj.minValuePromise = (message.minValuePromise || Long.UZERO).toString();
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<PaymentReferenceResponse>, I>>(base?: I): PaymentReferenceResponse {
+    return PaymentReferenceResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PaymentReferenceResponse>, I>>(object: I): PaymentReferenceResponse {
+    const message = createBasePaymentReferenceResponse();
+    message.paymentReferenceHex = object.paymentReferenceHex ?? "";
+    message.blockHeight = (object.blockHeight !== undefined && object.blockHeight !== null)
+      ? Long.fromValue(object.blockHeight)
+      : Long.UZERO;
+    message.blockHash = object.blockHash ?? new Uint8Array(0);
+    message.minedTimestamp = (object.minedTimestamp !== undefined && object.minedTimestamp !== null)
+      ? Long.fromValue(object.minedTimestamp)
+      : Long.UZERO;
+    message.commitment = object.commitment ?? new Uint8Array(0);
+    message.isSpent = object.isSpent ?? false;
+    message.spentHeight = (object.spentHeight !== undefined && object.spentHeight !== null)
+      ? Long.fromValue(object.spentHeight)
+      : Long.UZERO;
+    message.spentBlockHash = object.spentBlockHash ?? new Uint8Array(0);
+    message.minValuePromise = (object.minValuePromise !== undefined && object.minValuePromise !== null)
+      ? Long.fromValue(object.minValuePromise)
+      : Long.UZERO;
+    return message;
+  },
+};
+
 /** The gRPC interface for interacting with the base node. */
 export type BaseNodeService = typeof BaseNodeService;
 export const BaseNodeService = {
@@ -6534,6 +6917,18 @@ export const BaseNodeService = {
     responseSerialize: (value: GetNetworkStateResponse) => Buffer.from(GetNetworkStateResponse.encode(value).finish()),
     responseDeserialize: (value: Buffer) => GetNetworkStateResponse.decode(value),
   },
+  /** PayRef (Payment Reference) lookup for block explorers and external services */
+  searchPaymentReferences: {
+    path: "/tari.rpc.BaseNode/SearchPaymentReferences",
+    requestStream: false,
+    responseStream: true,
+    requestSerialize: (value: SearchPaymentReferencesRequest) =>
+      Buffer.from(SearchPaymentReferencesRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer) => SearchPaymentReferencesRequest.decode(value),
+    responseSerialize: (value: PaymentReferenceResponse) =>
+      Buffer.from(PaymentReferenceResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer) => PaymentReferenceResponse.decode(value),
+  },
 } as const;
 
 export interface BaseNodeServer extends UntypedServiceImplementation {
@@ -6606,6 +7001,8 @@ export interface BaseNodeServer extends UntypedServiceImplementation {
   getTemplateRegistrations: handleServerStreamingCall<GetTemplateRegistrationsRequest, GetTemplateRegistrationResponse>;
   getSideChainUtxos: handleServerStreamingCall<GetSideChainUtxosRequest, GetSideChainUtxosResponse>;
   getNetworkState: handleUnaryCall<GetNetworkStateRequest, GetNetworkStateResponse>;
+  /** PayRef (Payment Reference) lookup for block explorers and external services */
+  searchPaymentReferences: handleServerStreamingCall<SearchPaymentReferencesRequest, PaymentReferenceResponse>;
 }
 
 export interface BaseNodeClient extends Client {
@@ -7103,6 +7500,16 @@ export interface BaseNodeClient extends Client {
     options: Partial<CallOptions>,
     callback: (error: ServiceError | null, response: GetNetworkStateResponse) => void,
   ): ClientUnaryCall;
+  /** PayRef (Payment Reference) lookup for block explorers and external services */
+  searchPaymentReferences(
+    request: SearchPaymentReferencesRequest,
+    options?: Partial<CallOptions>,
+  ): ClientReadableStream<PaymentReferenceResponse>;
+  searchPaymentReferences(
+    request: SearchPaymentReferencesRequest,
+    metadata?: Metadata,
+    options?: Partial<CallOptions>,
+  ): ClientReadableStream<PaymentReferenceResponse>;
 }
 
 export const BaseNodeClient = makeGenericClientConstructor(BaseNodeService, "tari.rpc.BaseNode") as unknown as {
