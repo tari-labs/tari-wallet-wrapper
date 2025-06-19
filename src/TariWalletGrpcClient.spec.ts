@@ -149,7 +149,12 @@ describe('TariWalletGrpcClient', () => {
           amount: Long.fromNumber(1), // 1 Tari
           feePerGram: Long.fromNumber(25),
           paymentType: PaymentRecipient_PaymentType.ONE_SIDED,
-          paymentId: Buffer.from(`wallet-wrapper-test-${Date.now()}`)
+          userPaymentId: {
+            utf8String: `wallet-wrapper-test-${Date.now()}`,
+            u256: Buffer.from([]),
+            userBytes: Buffer.from([])
+          },
+          rawPaymentId: Buffer.from([])
         }]
       };
 
