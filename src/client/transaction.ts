@@ -153,6 +153,12 @@ export interface TransactionOutput {
   encryptedData: Uint8Array;
   /** The minimum value of the commitment that is proven by the range proof (in MicroMinotari) */
   minimumValuePromise: Long;
+  /**
+   * Payment reference (PayRef) - 32-byte Blake2b hash of (block_hash || output_hash)
+   * This provides a unique, deterministic reference for the output that can be used
+   * for payment verification without revealing wallet ownership
+   */
+  paymentReference: Uint8Array;
 }
 
 /** Options for UTXOs */
@@ -723,6 +729,7 @@ function createBaseTransactionOutput(): TransactionOutput {
     version: 0,
     encryptedData: new Uint8Array(0),
     minimumValuePromise: Long.UZERO,
+    paymentReference: new Uint8Array(0),
   };
 }
 
@@ -760,6 +767,9 @@ export const TransactionOutput: MessageFns<TransactionOutput> = {
     }
     if (!message.minimumValuePromise.equals(Long.UZERO)) {
       writer.uint32(88).uint64(message.minimumValuePromise.toString());
+    }
+    if (message.paymentReference.length !== 0) {
+      writer.uint32(98).bytes(message.paymentReference);
     }
     return writer;
   },
@@ -859,6 +869,14 @@ export const TransactionOutput: MessageFns<TransactionOutput> = {
           message.minimumValuePromise = Long.fromString(reader.uint64().toString(), true);
           continue;
         }
+        case 12: {
+          if (tag !== 98) {
+            break;
+          }
+
+          message.paymentReference = reader.bytes();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -885,6 +903,7 @@ export const TransactionOutput: MessageFns<TransactionOutput> = {
       version: isSet(object.version) ? globalThis.Number(object.version) : 0,
       encryptedData: isSet(object.encryptedData) ? bytesFromBase64(object.encryptedData) : new Uint8Array(0),
       minimumValuePromise: isSet(object.minimumValuePromise) ? Long.fromValue(object.minimumValuePromise) : Long.UZERO,
+      paymentReference: isSet(object.paymentReference) ? bytesFromBase64(object.paymentReference) : new Uint8Array(0),
     };
   },
 
@@ -923,6 +942,9 @@ export const TransactionOutput: MessageFns<TransactionOutput> = {
     if (!message.minimumValuePromise.equals(Long.UZERO)) {
       obj.minimumValuePromise = (message.minimumValuePromise || Long.UZERO).toString();
     }
+    if (message.paymentReference.length !== 0) {
+      obj.paymentReference = base64FromBytes(message.paymentReference);
+    }
     return obj;
   },
 
@@ -950,6 +972,7 @@ export const TransactionOutput: MessageFns<TransactionOutput> = {
     message.minimumValuePromise = (object.minimumValuePromise !== undefined && object.minimumValuePromise !== null)
       ? Long.fromValue(object.minimumValuePromise)
       : Long.UZERO;
+    message.paymentReference = object.paymentReference ?? new Uint8Array(0);
     return message;
   },
 };

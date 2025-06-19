@@ -1,6 +1,6 @@
 import { ChannelCredentials, ServiceError } from "@grpc/grpc-js";
 
-import { BaseNodeClient, BlockHeaderResponse, TipInfoResponse, GetBlocksRequest, GetNetworkStateRequest, GetNetworkStateResponse, StringValue } from "./client/base_node.js";
+import { BaseNodeClient, BlockHeaderResponse, TipInfoResponse, GetBlocksRequest, GetNetworkStateRequest, GetNetworkStateResponse, StringValue, ValueAtHeightResponse } from "./client/base_node.js";
 import { HistoricalBlock } from "./client/block.js";
 import { Empty } from "./client/types.js";
 import Long from "long";
@@ -10,6 +10,7 @@ export interface ITariBaseNodeGrpcClient {
   getTipInfo(): Promise<TipInfoResponse>;
   getBlocks(request: GetBlocksRequest): AsyncIterable<HistoricalBlock>;
   checkConnectivity(): Promise<{ status: number }>;
+  getTokensInCirculation(heights: number[]): AsyncIterable<ValueAtHeightResponse>;
 }
 
 export class TariBaseNodeGrpcClient implements ITariBaseNodeGrpcClient {
@@ -73,6 +74,15 @@ export class TariBaseNodeGrpcClient implements ITariBaseNodeGrpcClient {
       });
     });
     return response.value;
+  }
+
+  public async *getTokensInCirculation(heights: number[] = []): AsyncIterable<ValueAtHeightResponse> {
+    const request = GetBlocksRequest.create({ heights });
+    const stream = this.client.getTokensInCirculation(request);
+    
+    for await (const response of stream) {
+      yield response;
+    }
   }
 
   public async checkConnectivity(): Promise<{ status: number }> {

@@ -223,6 +223,49 @@ export function transactionStatusToJSON(object: TransactionStatus): string {
   }
 }
 
+/** Enum for payment direction */
+export enum PaymentDirection {
+  /** PAYMENT_DIRECTION_UNKNOWN - Unknown or unspecified direction */
+  PAYMENT_DIRECTION_UNKNOWN = 0,
+  /** PAYMENT_DIRECTION_INBOUND - Payment received by this wallet */
+  PAYMENT_DIRECTION_INBOUND = 1,
+  /** PAYMENT_DIRECTION_OUTBOUND - Payment sent from this wallet */
+  PAYMENT_DIRECTION_OUTBOUND = 2,
+  UNRECOGNIZED = -1,
+}
+
+export function paymentDirectionFromJSON(object: any): PaymentDirection {
+  switch (object) {
+    case 0:
+    case "PAYMENT_DIRECTION_UNKNOWN":
+      return PaymentDirection.PAYMENT_DIRECTION_UNKNOWN;
+    case 1:
+    case "PAYMENT_DIRECTION_INBOUND":
+      return PaymentDirection.PAYMENT_DIRECTION_INBOUND;
+    case 2:
+    case "PAYMENT_DIRECTION_OUTBOUND":
+      return PaymentDirection.PAYMENT_DIRECTION_OUTBOUND;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return PaymentDirection.UNRECOGNIZED;
+  }
+}
+
+export function paymentDirectionToJSON(object: PaymentDirection): string {
+  switch (object) {
+    case PaymentDirection.PAYMENT_DIRECTION_UNKNOWN:
+      return "PAYMENT_DIRECTION_UNKNOWN";
+    case PaymentDirection.PAYMENT_DIRECTION_INBOUND:
+      return "PAYMENT_DIRECTION_INBOUND";
+    case PaymentDirection.PAYMENT_DIRECTION_OUTBOUND:
+      return "PAYMENT_DIRECTION_OUTBOUND";
+    case PaymentDirection.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
 export interface GetVersionRequest {
 }
 
@@ -288,9 +331,17 @@ export interface PaymentRecipient {
 }
 
 export enum PaymentRecipient_PaymentType {
-  /** STANDARD_MIMBLEWIMBLE - Default Mimblewimble-style transaction. */
+  /**
+   * STANDARD_MIMBLEWIMBLE - Default Mimblewimble-style transaction.
+   *
+   * @deprecated
+   */
   STANDARD_MIMBLEWIMBLE = 0,
-  /** ONE_SIDED - One-sided transaction (receiver not required to participate). */
+  /**
+   * ONE_SIDED - One-sided transaction (receiver not required to participate).
+   *
+   * @deprecated
+   */
   ONE_SIDED = 1,
   /** ONE_SIDED_TO_STEALTH_ADDRESS - One-sided stealth address (adds privacy by hiding destination). */
   ONE_SIDED_TO_STEALTH_ADDRESS = 2,
@@ -356,6 +407,7 @@ export interface TransferResult {
   transactionId: Long;
   isSuccess: boolean;
   failureMessage: string;
+  transactionInfo: TransactionInfo | undefined;
 }
 
 export interface ClaimShaAtomicSwapRequest {
@@ -399,6 +451,11 @@ export interface TransactionInfo {
   rawPaymentId: Uint8Array;
   minedInBlockHeight: Long;
   userPaymentId: Uint8Array;
+  inputCommitments: Uint8Array[];
+  outputCommitments: Uint8Array[];
+  paymentReferencesSent: Uint8Array[];
+  paymentReferencesReceived: Uint8Array[];
+  paymentReferencesChange: Uint8Array[];
 }
 
 export interface GetCompletedTransactionsRequest {
@@ -628,6 +685,16 @@ export interface ImportTransactionsResponse {
   txIds: Long[];
 }
 
+export interface GetAllCompletedTransactionsRequest {
+  offset: Long;
+  limit: Long;
+  statusBitflag: Long;
+}
+
+export interface GetAllCompletedTransactionsResponse {
+  transactions: TransactionInfo[];
+}
+
 /** Request message for getting transactions at a specific block height */
 export interface GetBlockHeightTransactionsRequest {
   /** The block height to fetch transactions for */
@@ -637,6 +704,45 @@ export interface GetBlockHeightTransactionsRequest {
 export interface GetBlockHeightTransactionsResponse {
   /** List of transactions mined at the specified block height */
   transactions: TransactionInfo[];
+}
+
+/** Request message for GetTransactionPayRefs RPC. */
+export interface GetTransactionPayRefsRequest {
+  /** The transaction ID to retrieve PayRefs for. */
+  transactionId: Long;
+}
+
+/** Response message for GetTransactionPayRefs RPC. */
+export interface GetTransactionPayRefsResponse {
+  /** List of PayRefs (32-byte payment references) for the transaction. */
+  paymentReferences: Uint8Array[];
+}
+
+/** Response message for GetTransactionsWithPayRefs RPC. */
+export interface GetTransactionsWithPayRefsResponse {
+  /** The transaction information. */
+  transaction:
+    | TransactionInfo
+    | undefined;
+  /** List of PayRefs associated with this transaction. */
+  paymentReferences: Uint8Array[];
+  /** Number of unique recipients for this transaction. */
+  recipientCount: Long;
+}
+
+/** Request message for getting payment details by payment reference */
+export interface GetPaymentByReferenceRequest {
+  /** The 32-byte payment reference hash to look up */
+  paymentReference: Uint8Array;
+}
+
+/** Response message containing transaction information for a payment reference */
+export interface GetPaymentByReferenceResponse {
+  /**
+   * The transaction information if PayRef is found (optional).
+   * Returns full transaction details
+   */
+  transaction: TransactionInfo | undefined;
 }
 
 function createBaseGetVersionRequest(): GetVersionRequest {
@@ -1782,7 +1888,7 @@ export const CreateBurnTransactionResponse: MessageFns<CreateBurnTransactionResp
 };
 
 function createBaseTransferResult(): TransferResult {
-  return { address: "", transactionId: Long.UZERO, isSuccess: false, failureMessage: "" };
+  return { address: "", transactionId: Long.UZERO, isSuccess: false, failureMessage: "", transactionInfo: undefined };
 }
 
 export const TransferResult: MessageFns<TransferResult> = {
@@ -1798,6 +1904,9 @@ export const TransferResult: MessageFns<TransferResult> = {
     }
     if (message.failureMessage !== "") {
       writer.uint32(34).string(message.failureMessage);
+    }
+    if (message.transactionInfo !== undefined) {
+      TransactionInfo.encode(message.transactionInfo, writer.uint32(42).fork()).join();
     }
     return writer;
   },
@@ -1841,6 +1950,14 @@ export const TransferResult: MessageFns<TransferResult> = {
           message.failureMessage = reader.string();
           continue;
         }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.transactionInfo = TransactionInfo.decode(reader, reader.uint32());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1856,6 +1973,7 @@ export const TransferResult: MessageFns<TransferResult> = {
       transactionId: isSet(object.transactionId) ? Long.fromValue(object.transactionId) : Long.UZERO,
       isSuccess: isSet(object.isSuccess) ? globalThis.Boolean(object.isSuccess) : false,
       failureMessage: isSet(object.failureMessage) ? globalThis.String(object.failureMessage) : "",
+      transactionInfo: isSet(object.transactionInfo) ? TransactionInfo.fromJSON(object.transactionInfo) : undefined,
     };
   },
 
@@ -1873,6 +1991,9 @@ export const TransferResult: MessageFns<TransferResult> = {
     if (message.failureMessage !== "") {
       obj.failureMessage = message.failureMessage;
     }
+    if (message.transactionInfo !== undefined) {
+      obj.transactionInfo = TransactionInfo.toJSON(message.transactionInfo);
+    }
     return obj;
   },
 
@@ -1887,6 +2008,9 @@ export const TransferResult: MessageFns<TransferResult> = {
       : Long.UZERO;
     message.isSuccess = object.isSuccess ?? false;
     message.failureMessage = object.failureMessage ?? "";
+    message.transactionInfo = (object.transactionInfo !== undefined && object.transactionInfo !== null)
+      ? TransactionInfo.fromPartial(object.transactionInfo)
+      : undefined;
     return message;
   },
 };
@@ -2334,6 +2458,11 @@ function createBaseTransactionInfo(): TransactionInfo {
     rawPaymentId: new Uint8Array(0),
     minedInBlockHeight: Long.UZERO,
     userPaymentId: new Uint8Array(0),
+    inputCommitments: [],
+    outputCommitments: [],
+    paymentReferencesSent: [],
+    paymentReferencesReceived: [],
+    paymentReferencesChange: [],
   };
 }
 
@@ -2377,6 +2506,21 @@ export const TransactionInfo: MessageFns<TransactionInfo> = {
     }
     if (message.userPaymentId.length !== 0) {
       writer.uint32(114).bytes(message.userPaymentId);
+    }
+    for (const v of message.inputCommitments) {
+      writer.uint32(122).bytes(v!);
+    }
+    for (const v of message.outputCommitments) {
+      writer.uint32(130).bytes(v!);
+    }
+    for (const v of message.paymentReferencesSent) {
+      writer.uint32(138).bytes(v!);
+    }
+    for (const v of message.paymentReferencesReceived) {
+      writer.uint32(146).bytes(v!);
+    }
+    for (const v of message.paymentReferencesChange) {
+      writer.uint32(154).bytes(v!);
     }
     return writer;
   },
@@ -2492,6 +2636,46 @@ export const TransactionInfo: MessageFns<TransactionInfo> = {
           message.userPaymentId = reader.bytes();
           continue;
         }
+        case 15: {
+          if (tag !== 122) {
+            break;
+          }
+
+          message.inputCommitments.push(reader.bytes());
+          continue;
+        }
+        case 16: {
+          if (tag !== 130) {
+            break;
+          }
+
+          message.outputCommitments.push(reader.bytes());
+          continue;
+        }
+        case 17: {
+          if (tag !== 138) {
+            break;
+          }
+
+          message.paymentReferencesSent.push(reader.bytes());
+          continue;
+        }
+        case 18: {
+          if (tag !== 146) {
+            break;
+          }
+
+          message.paymentReferencesReceived.push(reader.bytes());
+          continue;
+        }
+        case 19: {
+          if (tag !== 154) {
+            break;
+          }
+
+          message.paymentReferencesChange.push(reader.bytes());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2516,6 +2700,21 @@ export const TransactionInfo: MessageFns<TransactionInfo> = {
       rawPaymentId: isSet(object.rawPaymentId) ? bytesFromBase64(object.rawPaymentId) : new Uint8Array(0),
       minedInBlockHeight: isSet(object.minedInBlockHeight) ? Long.fromValue(object.minedInBlockHeight) : Long.UZERO,
       userPaymentId: isSet(object.userPaymentId) ? bytesFromBase64(object.userPaymentId) : new Uint8Array(0),
+      inputCommitments: globalThis.Array.isArray(object?.inputCommitments)
+        ? object.inputCommitments.map((e: any) => bytesFromBase64(e))
+        : [],
+      outputCommitments: globalThis.Array.isArray(object?.outputCommitments)
+        ? object.outputCommitments.map((e: any) => bytesFromBase64(e))
+        : [],
+      paymentReferencesSent: globalThis.Array.isArray(object?.paymentReferencesSent)
+        ? object.paymentReferencesSent.map((e: any) => bytesFromBase64(e))
+        : [],
+      paymentReferencesReceived: globalThis.Array.isArray(object?.paymentReferencesReceived)
+        ? object.paymentReferencesReceived.map((e: any) => bytesFromBase64(e))
+        : [],
+      paymentReferencesChange: globalThis.Array.isArray(object?.paymentReferencesChange)
+        ? object.paymentReferencesChange.map((e: any) => bytesFromBase64(e))
+        : [],
     };
   },
 
@@ -2560,6 +2759,21 @@ export const TransactionInfo: MessageFns<TransactionInfo> = {
     if (message.userPaymentId.length !== 0) {
       obj.userPaymentId = base64FromBytes(message.userPaymentId);
     }
+    if (message.inputCommitments?.length) {
+      obj.inputCommitments = message.inputCommitments.map((e) => base64FromBytes(e));
+    }
+    if (message.outputCommitments?.length) {
+      obj.outputCommitments = message.outputCommitments.map((e) => base64FromBytes(e));
+    }
+    if (message.paymentReferencesSent?.length) {
+      obj.paymentReferencesSent = message.paymentReferencesSent.map((e) => base64FromBytes(e));
+    }
+    if (message.paymentReferencesReceived?.length) {
+      obj.paymentReferencesReceived = message.paymentReferencesReceived.map((e) => base64FromBytes(e));
+    }
+    if (message.paymentReferencesChange?.length) {
+      obj.paymentReferencesChange = message.paymentReferencesChange.map((e) => base64FromBytes(e));
+    }
     return obj;
   },
 
@@ -2587,6 +2801,11 @@ export const TransactionInfo: MessageFns<TransactionInfo> = {
       ? Long.fromValue(object.minedInBlockHeight)
       : Long.UZERO;
     message.userPaymentId = object.userPaymentId ?? new Uint8Array(0);
+    message.inputCommitments = object.inputCommitments?.map((e) => e) || [];
+    message.outputCommitments = object.outputCommitments?.map((e) => e) || [];
+    message.paymentReferencesSent = object.paymentReferencesSent?.map((e) => e) || [];
+    message.paymentReferencesReceived = object.paymentReferencesReceived?.map((e) => e) || [];
+    message.paymentReferencesChange = object.paymentReferencesChange?.map((e) => e) || [];
     return message;
   },
 };
@@ -4971,6 +5190,172 @@ export const ImportTransactionsResponse: MessageFns<ImportTransactionsResponse> 
   },
 };
 
+function createBaseGetAllCompletedTransactionsRequest(): GetAllCompletedTransactionsRequest {
+  return { offset: Long.UZERO, limit: Long.UZERO, statusBitflag: Long.UZERO };
+}
+
+export const GetAllCompletedTransactionsRequest: MessageFns<GetAllCompletedTransactionsRequest> = {
+  encode(message: GetAllCompletedTransactionsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (!message.offset.equals(Long.UZERO)) {
+      writer.uint32(8).uint64(message.offset.toString());
+    }
+    if (!message.limit.equals(Long.UZERO)) {
+      writer.uint32(16).uint64(message.limit.toString());
+    }
+    if (!message.statusBitflag.equals(Long.UZERO)) {
+      writer.uint32(24).uint64(message.statusBitflag.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetAllCompletedTransactionsRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetAllCompletedTransactionsRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.offset = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.limit = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.statusBitflag = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GetAllCompletedTransactionsRequest {
+    return {
+      offset: isSet(object.offset) ? Long.fromValue(object.offset) : Long.UZERO,
+      limit: isSet(object.limit) ? Long.fromValue(object.limit) : Long.UZERO,
+      statusBitflag: isSet(object.statusBitflag) ? Long.fromValue(object.statusBitflag) : Long.UZERO,
+    };
+  },
+
+  toJSON(message: GetAllCompletedTransactionsRequest): unknown {
+    const obj: any = {};
+    if (!message.offset.equals(Long.UZERO)) {
+      obj.offset = (message.offset || Long.UZERO).toString();
+    }
+    if (!message.limit.equals(Long.UZERO)) {
+      obj.limit = (message.limit || Long.UZERO).toString();
+    }
+    if (!message.statusBitflag.equals(Long.UZERO)) {
+      obj.statusBitflag = (message.statusBitflag || Long.UZERO).toString();
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<GetAllCompletedTransactionsRequest>, I>>(
+    base?: I,
+  ): GetAllCompletedTransactionsRequest {
+    return GetAllCompletedTransactionsRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GetAllCompletedTransactionsRequest>, I>>(
+    object: I,
+  ): GetAllCompletedTransactionsRequest {
+    const message = createBaseGetAllCompletedTransactionsRequest();
+    message.offset = (object.offset !== undefined && object.offset !== null)
+      ? Long.fromValue(object.offset)
+      : Long.UZERO;
+    message.limit = (object.limit !== undefined && object.limit !== null) ? Long.fromValue(object.limit) : Long.UZERO;
+    message.statusBitflag = (object.statusBitflag !== undefined && object.statusBitflag !== null)
+      ? Long.fromValue(object.statusBitflag)
+      : Long.UZERO;
+    return message;
+  },
+};
+
+function createBaseGetAllCompletedTransactionsResponse(): GetAllCompletedTransactionsResponse {
+  return { transactions: [] };
+}
+
+export const GetAllCompletedTransactionsResponse: MessageFns<GetAllCompletedTransactionsResponse> = {
+  encode(message: GetAllCompletedTransactionsResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.transactions) {
+      TransactionInfo.encode(v!, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetAllCompletedTransactionsResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetAllCompletedTransactionsResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.transactions.push(TransactionInfo.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GetAllCompletedTransactionsResponse {
+    return {
+      transactions: globalThis.Array.isArray(object?.transactions)
+        ? object.transactions.map((e: any) => TransactionInfo.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: GetAllCompletedTransactionsResponse): unknown {
+    const obj: any = {};
+    if (message.transactions?.length) {
+      obj.transactions = message.transactions.map((e) => TransactionInfo.toJSON(e));
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<GetAllCompletedTransactionsResponse>, I>>(
+    base?: I,
+  ): GetAllCompletedTransactionsResponse {
+    return GetAllCompletedTransactionsResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GetAllCompletedTransactionsResponse>, I>>(
+    object: I,
+  ): GetAllCompletedTransactionsResponse {
+    const message = createBaseGetAllCompletedTransactionsResponse();
+    message.transactions = object.transactions?.map((e) => TransactionInfo.fromPartial(e)) || [];
+    return message;
+  },
+};
+
 function createBaseGetBlockHeightTransactionsRequest(): GetBlockHeightTransactionsRequest {
   return { blockHeight: Long.UZERO };
 }
@@ -5097,6 +5482,354 @@ export const GetBlockHeightTransactionsResponse: MessageFns<GetBlockHeightTransa
   ): GetBlockHeightTransactionsResponse {
     const message = createBaseGetBlockHeightTransactionsResponse();
     message.transactions = object.transactions?.map((e) => TransactionInfo.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseGetTransactionPayRefsRequest(): GetTransactionPayRefsRequest {
+  return { transactionId: Long.UZERO };
+}
+
+export const GetTransactionPayRefsRequest: MessageFns<GetTransactionPayRefsRequest> = {
+  encode(message: GetTransactionPayRefsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (!message.transactionId.equals(Long.UZERO)) {
+      writer.uint32(8).uint64(message.transactionId.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetTransactionPayRefsRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetTransactionPayRefsRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.transactionId = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GetTransactionPayRefsRequest {
+    return { transactionId: isSet(object.transactionId) ? Long.fromValue(object.transactionId) : Long.UZERO };
+  },
+
+  toJSON(message: GetTransactionPayRefsRequest): unknown {
+    const obj: any = {};
+    if (!message.transactionId.equals(Long.UZERO)) {
+      obj.transactionId = (message.transactionId || Long.UZERO).toString();
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<GetTransactionPayRefsRequest>, I>>(base?: I): GetTransactionPayRefsRequest {
+    return GetTransactionPayRefsRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GetTransactionPayRefsRequest>, I>>(object: I): GetTransactionPayRefsRequest {
+    const message = createBaseGetTransactionPayRefsRequest();
+    message.transactionId = (object.transactionId !== undefined && object.transactionId !== null)
+      ? Long.fromValue(object.transactionId)
+      : Long.UZERO;
+    return message;
+  },
+};
+
+function createBaseGetTransactionPayRefsResponse(): GetTransactionPayRefsResponse {
+  return { paymentReferences: [] };
+}
+
+export const GetTransactionPayRefsResponse: MessageFns<GetTransactionPayRefsResponse> = {
+  encode(message: GetTransactionPayRefsResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.paymentReferences) {
+      writer.uint32(10).bytes(v!);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetTransactionPayRefsResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetTransactionPayRefsResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.paymentReferences.push(reader.bytes());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GetTransactionPayRefsResponse {
+    return {
+      paymentReferences: globalThis.Array.isArray(object?.paymentReferences)
+        ? object.paymentReferences.map((e: any) => bytesFromBase64(e))
+        : [],
+    };
+  },
+
+  toJSON(message: GetTransactionPayRefsResponse): unknown {
+    const obj: any = {};
+    if (message.paymentReferences?.length) {
+      obj.paymentReferences = message.paymentReferences.map((e) => base64FromBytes(e));
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<GetTransactionPayRefsResponse>, I>>(base?: I): GetTransactionPayRefsResponse {
+    return GetTransactionPayRefsResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GetTransactionPayRefsResponse>, I>>(
+    object: I,
+  ): GetTransactionPayRefsResponse {
+    const message = createBaseGetTransactionPayRefsResponse();
+    message.paymentReferences = object.paymentReferences?.map((e) => e) || [];
+    return message;
+  },
+};
+
+function createBaseGetTransactionsWithPayRefsResponse(): GetTransactionsWithPayRefsResponse {
+  return { transaction: undefined, paymentReferences: [], recipientCount: Long.UZERO };
+}
+
+export const GetTransactionsWithPayRefsResponse: MessageFns<GetTransactionsWithPayRefsResponse> = {
+  encode(message: GetTransactionsWithPayRefsResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.transaction !== undefined) {
+      TransactionInfo.encode(message.transaction, writer.uint32(10).fork()).join();
+    }
+    for (const v of message.paymentReferences) {
+      writer.uint32(18).bytes(v!);
+    }
+    if (!message.recipientCount.equals(Long.UZERO)) {
+      writer.uint32(24).uint64(message.recipientCount.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetTransactionsWithPayRefsResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetTransactionsWithPayRefsResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.transaction = TransactionInfo.decode(reader, reader.uint32());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.paymentReferences.push(reader.bytes());
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.recipientCount = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GetTransactionsWithPayRefsResponse {
+    return {
+      transaction: isSet(object.transaction) ? TransactionInfo.fromJSON(object.transaction) : undefined,
+      paymentReferences: globalThis.Array.isArray(object?.paymentReferences)
+        ? object.paymentReferences.map((e: any) => bytesFromBase64(e))
+        : [],
+      recipientCount: isSet(object.recipientCount) ? Long.fromValue(object.recipientCount) : Long.UZERO,
+    };
+  },
+
+  toJSON(message: GetTransactionsWithPayRefsResponse): unknown {
+    const obj: any = {};
+    if (message.transaction !== undefined) {
+      obj.transaction = TransactionInfo.toJSON(message.transaction);
+    }
+    if (message.paymentReferences?.length) {
+      obj.paymentReferences = message.paymentReferences.map((e) => base64FromBytes(e));
+    }
+    if (!message.recipientCount.equals(Long.UZERO)) {
+      obj.recipientCount = (message.recipientCount || Long.UZERO).toString();
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<GetTransactionsWithPayRefsResponse>, I>>(
+    base?: I,
+  ): GetTransactionsWithPayRefsResponse {
+    return GetTransactionsWithPayRefsResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GetTransactionsWithPayRefsResponse>, I>>(
+    object: I,
+  ): GetTransactionsWithPayRefsResponse {
+    const message = createBaseGetTransactionsWithPayRefsResponse();
+    message.transaction = (object.transaction !== undefined && object.transaction !== null)
+      ? TransactionInfo.fromPartial(object.transaction)
+      : undefined;
+    message.paymentReferences = object.paymentReferences?.map((e) => e) || [];
+    message.recipientCount = (object.recipientCount !== undefined && object.recipientCount !== null)
+      ? Long.fromValue(object.recipientCount)
+      : Long.UZERO;
+    return message;
+  },
+};
+
+function createBaseGetPaymentByReferenceRequest(): GetPaymentByReferenceRequest {
+  return { paymentReference: new Uint8Array(0) };
+}
+
+export const GetPaymentByReferenceRequest: MessageFns<GetPaymentByReferenceRequest> = {
+  encode(message: GetPaymentByReferenceRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.paymentReference.length !== 0) {
+      writer.uint32(10).bytes(message.paymentReference);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetPaymentByReferenceRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetPaymentByReferenceRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.paymentReference = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GetPaymentByReferenceRequest {
+    return {
+      paymentReference: isSet(object.paymentReference) ? bytesFromBase64(object.paymentReference) : new Uint8Array(0),
+    };
+  },
+
+  toJSON(message: GetPaymentByReferenceRequest): unknown {
+    const obj: any = {};
+    if (message.paymentReference.length !== 0) {
+      obj.paymentReference = base64FromBytes(message.paymentReference);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<GetPaymentByReferenceRequest>, I>>(base?: I): GetPaymentByReferenceRequest {
+    return GetPaymentByReferenceRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GetPaymentByReferenceRequest>, I>>(object: I): GetPaymentByReferenceRequest {
+    const message = createBaseGetPaymentByReferenceRequest();
+    message.paymentReference = object.paymentReference ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseGetPaymentByReferenceResponse(): GetPaymentByReferenceResponse {
+  return { transaction: undefined };
+}
+
+export const GetPaymentByReferenceResponse: MessageFns<GetPaymentByReferenceResponse> = {
+  encode(message: GetPaymentByReferenceResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.transaction !== undefined) {
+      TransactionInfo.encode(message.transaction, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetPaymentByReferenceResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetPaymentByReferenceResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.transaction = TransactionInfo.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GetPaymentByReferenceResponse {
+    return { transaction: isSet(object.transaction) ? TransactionInfo.fromJSON(object.transaction) : undefined };
+  },
+
+  toJSON(message: GetPaymentByReferenceResponse): unknown {
+    const obj: any = {};
+    if (message.transaction !== undefined) {
+      obj.transaction = TransactionInfo.toJSON(message.transaction);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<GetPaymentByReferenceResponse>, I>>(base?: I): GetPaymentByReferenceResponse {
+    return GetPaymentByReferenceResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GetPaymentByReferenceResponse>, I>>(
+    object: I,
+  ): GetPaymentByReferenceResponse {
+    const message = createBaseGetPaymentByReferenceResponse();
+    message.transaction = (object.transaction !== undefined && object.transaction !== null)
+      ? TransactionInfo.fromPartial(object.transaction)
+      : undefined;
     return message;
   },
 };
@@ -5567,6 +6300,54 @@ export const WalletService = {
     responseSerialize: (value: GetBlockHeightTransactionsResponse) =>
       Buffer.from(GetBlockHeightTransactionsResponse.encode(value).finish()),
     responseDeserialize: (value: Buffer) => GetBlockHeightTransactionsResponse.decode(value),
+  },
+  /**
+   * Returns all PayRefs (payment references) for a specific transaction.
+   *
+   * The `GetTransactionPayRefs` call retrieves all PayRefs associated with the specified
+   * transaction ID. PayRefs are cryptographic references generated from output hashes
+   * that allow recipients to verify payments without revealing sensitive transaction details.
+   *
+   * ### Request Parameters:
+   *
+   * - `transaction_id` (required):
+   *   - **Type**: `uint64`
+   *   - **Description**: The transaction ID to retrieve PayRefs for.
+   *   - **Restrictions**:
+   *     - Must be a valid transaction ID that exists in the wallet.
+   *     - If the transaction ID is invalid or not found, an error will be returned.
+   *
+   * ### Example JavaScript gRPC client usage:
+   *
+   * ```javascript
+   * const request = {
+   *   transaction_id: 12345
+   * };
+   * const response = await client.getTransactionPayRefs(request);
+   * console.log("PayRefs:", response.payment_references.map(ref => Buffer.from(ref).toString('hex')));
+   * ```
+   *
+   * ### Sample JSON Response:
+   *
+   * ```json
+   * {
+   *   "payment_references": [
+   *     "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+   *     "0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321"
+   *   ]
+   * }
+   * ```
+   */
+  getTransactionPayRefs: {
+    path: "/tari.rpc.Wallet/GetTransactionPayRefs",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: GetTransactionPayRefsRequest) =>
+      Buffer.from(GetTransactionPayRefsRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer) => GetTransactionPayRefsRequest.decode(value),
+    responseSerialize: (value: GetTransactionPayRefsResponse) =>
+      Buffer.from(GetTransactionPayRefsResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer) => GetTransactionPayRefsResponse.decode(value),
   },
   /**
    * Returns the wallet balance details.
@@ -6324,6 +7105,75 @@ export const WalletService = {
       Buffer.from(ImportTransactionsResponse.encode(value).finish()),
     responseDeserialize: (value: Buffer) => ImportTransactionsResponse.decode(value),
   },
+  /** Get all completed transactions including cancelled ones, sorted by timestamp and paginated */
+  getAllCompletedTransactions: {
+    path: "/tari.rpc.Wallet/GetAllCompletedTransactions",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: GetAllCompletedTransactionsRequest) =>
+      Buffer.from(GetAllCompletedTransactionsRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer) => GetAllCompletedTransactionsRequest.decode(value),
+    responseSerialize: (value: GetAllCompletedTransactionsResponse) =>
+      Buffer.from(GetAllCompletedTransactionsResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer) => GetAllCompletedTransactionsResponse.decode(value),
+  },
+  /**
+   * Gets transaction information by payment reference (PayRef)
+   *
+   * The `GetPaymentByReference` call retrieves transaction information using a 32-byte payment reference hash.
+   * PayRefs are generated as Blake2b_256(block_hash || output_hash) and provide a stable way to look up
+   * transactions even after outputs are spent.
+   *
+   * ### Request Parameters:
+   *
+   * - `payment_reference` (required):
+   *   - **Type**: `bytes` (32 bytes)
+   *   - **Description**: The payment reference hash to look up
+   *   - **Restrictions**: Must be exactly 32 bytes representing a valid PayRef
+   *
+   * ### Example JavaScript gRPC client usage:
+   *
+   * ```javascript
+   * const payref = Buffer.from('a1b2c3d4e5f6789012345678901234567890123456789012345678901234567890', 'hex');
+   * const request = { payment_reference: payref };
+   * client.getPaymentByReference(request, (err, response) => {
+   *   if (err) console.error(err);
+   *   else console.log('Transaction found:', response.transaction);
+   * });
+   * ```
+   *
+   * ### Sample JSON Response:
+   *
+   * ```json
+   * {
+   *   "transaction": {
+   *     "tx_id": 12345,
+   *     "source_address": "0x1234abcd...",
+   *     "dest_address": "0x5678efgh...",
+   *     "status": "TRANSACTION_STATUS_MINED_CONFIRMED",
+   *     "direction": "TRANSACTION_DIRECTION_INBOUND",
+   *     "amount": 1000000,
+   *     "fee": 20,
+   *     "is_cancelled": false,
+   *     "excess_sig": "0xabcdef...",
+   *     "timestamp": 1681234567,
+   *     "payment_id": "0xdeadbeef...",
+   *     "mined_in_block_height": 150000
+   *   }
+   * }
+   * ```
+   */
+  getPaymentByReference: {
+    path: "/tari.rpc.Wallet/GetPaymentByReference",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: GetPaymentByReferenceRequest) =>
+      Buffer.from(GetPaymentByReferenceRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer) => GetPaymentByReferenceRequest.decode(value),
+    responseSerialize: (value: GetPaymentByReferenceResponse) =>
+      Buffer.from(GetPaymentByReferenceResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer) => GetPaymentByReferenceResponse.decode(value),
+  },
 } as const;
 
 export interface WalletServer extends UntypedServiceImplementation {
@@ -6688,6 +7538,44 @@ export interface WalletServer extends UntypedServiceImplementation {
    * ```
    */
   getBlockHeightTransactions: handleUnaryCall<GetBlockHeightTransactionsRequest, GetBlockHeightTransactionsResponse>;
+  /**
+   * Returns all PayRefs (payment references) for a specific transaction.
+   *
+   * The `GetTransactionPayRefs` call retrieves all PayRefs associated with the specified
+   * transaction ID. PayRefs are cryptographic references generated from output hashes
+   * that allow recipients to verify payments without revealing sensitive transaction details.
+   *
+   * ### Request Parameters:
+   *
+   * - `transaction_id` (required):
+   *   - **Type**: `uint64`
+   *   - **Description**: The transaction ID to retrieve PayRefs for.
+   *   - **Restrictions**:
+   *     - Must be a valid transaction ID that exists in the wallet.
+   *     - If the transaction ID is invalid or not found, an error will be returned.
+   *
+   * ### Example JavaScript gRPC client usage:
+   *
+   * ```javascript
+   * const request = {
+   *   transaction_id: 12345
+   * };
+   * const response = await client.getTransactionPayRefs(request);
+   * console.log("PayRefs:", response.payment_references.map(ref => Buffer.from(ref).toString('hex')));
+   * ```
+   *
+   * ### Sample JSON Response:
+   *
+   * ```json
+   * {
+   *   "payment_references": [
+   *     "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+   *     "0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321"
+   *   ]
+   * }
+   * ```
+   */
+  getTransactionPayRefs: handleUnaryCall<GetTransactionPayRefsRequest, GetTransactionPayRefsResponse>;
   /**
    * Returns the wallet balance details.
    *
@@ -7285,6 +8173,55 @@ export interface WalletServer extends UntypedServiceImplementation {
   streamTransactionEvents: handleServerStreamingCall<TransactionEventRequest, TransactionEventResponse>;
   registerValidatorNode: handleUnaryCall<RegisterValidatorNodeRequest, RegisterValidatorNodeResponse>;
   importTransactions: handleUnaryCall<ImportTransactionsRequest, ImportTransactionsResponse>;
+  /** Get all completed transactions including cancelled ones, sorted by timestamp and paginated */
+  getAllCompletedTransactions: handleUnaryCall<GetAllCompletedTransactionsRequest, GetAllCompletedTransactionsResponse>;
+  /**
+   * Gets transaction information by payment reference (PayRef)
+   *
+   * The `GetPaymentByReference` call retrieves transaction information using a 32-byte payment reference hash.
+   * PayRefs are generated as Blake2b_256(block_hash || output_hash) and provide a stable way to look up
+   * transactions even after outputs are spent.
+   *
+   * ### Request Parameters:
+   *
+   * - `payment_reference` (required):
+   *   - **Type**: `bytes` (32 bytes)
+   *   - **Description**: The payment reference hash to look up
+   *   - **Restrictions**: Must be exactly 32 bytes representing a valid PayRef
+   *
+   * ### Example JavaScript gRPC client usage:
+   *
+   * ```javascript
+   * const payref = Buffer.from('a1b2c3d4e5f6789012345678901234567890123456789012345678901234567890', 'hex');
+   * const request = { payment_reference: payref };
+   * client.getPaymentByReference(request, (err, response) => {
+   *   if (err) console.error(err);
+   *   else console.log('Transaction found:', response.transaction);
+   * });
+   * ```
+   *
+   * ### Sample JSON Response:
+   *
+   * ```json
+   * {
+   *   "transaction": {
+   *     "tx_id": 12345,
+   *     "source_address": "0x1234abcd...",
+   *     "dest_address": "0x5678efgh...",
+   *     "status": "TRANSACTION_STATUS_MINED_CONFIRMED",
+   *     "direction": "TRANSACTION_DIRECTION_INBOUND",
+   *     "amount": 1000000,
+   *     "fee": 20,
+   *     "is_cancelled": false,
+   *     "excess_sig": "0xabcdef...",
+   *     "timestamp": 1681234567,
+   *     "payment_id": "0xdeadbeef...",
+   *     "mined_in_block_height": 150000
+   *   }
+   * }
+   * ```
+   */
+  getPaymentByReference: handleUnaryCall<GetPaymentByReferenceRequest, GetPaymentByReferenceResponse>;
 }
 
 export interface WalletClient extends Client {
@@ -7807,6 +8744,58 @@ export interface WalletClient extends Client {
     metadata: Metadata,
     options: Partial<CallOptions>,
     callback: (error: ServiceError | null, response: GetBlockHeightTransactionsResponse) => void,
+  ): ClientUnaryCall;
+  /**
+   * Returns all PayRefs (payment references) for a specific transaction.
+   *
+   * The `GetTransactionPayRefs` call retrieves all PayRefs associated with the specified
+   * transaction ID. PayRefs are cryptographic references generated from output hashes
+   * that allow recipients to verify payments without revealing sensitive transaction details.
+   *
+   * ### Request Parameters:
+   *
+   * - `transaction_id` (required):
+   *   - **Type**: `uint64`
+   *   - **Description**: The transaction ID to retrieve PayRefs for.
+   *   - **Restrictions**:
+   *     - Must be a valid transaction ID that exists in the wallet.
+   *     - If the transaction ID is invalid or not found, an error will be returned.
+   *
+   * ### Example JavaScript gRPC client usage:
+   *
+   * ```javascript
+   * const request = {
+   *   transaction_id: 12345
+   * };
+   * const response = await client.getTransactionPayRefs(request);
+   * console.log("PayRefs:", response.payment_references.map(ref => Buffer.from(ref).toString('hex')));
+   * ```
+   *
+   * ### Sample JSON Response:
+   *
+   * ```json
+   * {
+   *   "payment_references": [
+   *     "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+   *     "0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321"
+   *   ]
+   * }
+   * ```
+   */
+  getTransactionPayRefs(
+    request: GetTransactionPayRefsRequest,
+    callback: (error: ServiceError | null, response: GetTransactionPayRefsResponse) => void,
+  ): ClientUnaryCall;
+  getTransactionPayRefs(
+    request: GetTransactionPayRefsRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: GetTransactionPayRefsResponse) => void,
+  ): ClientUnaryCall;
+  getTransactionPayRefs(
+    request: GetTransactionPayRefsRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: GetTransactionPayRefsResponse) => void,
   ): ClientUnaryCall;
   /**
    * Returns the wallet balance details.
@@ -8650,6 +9639,83 @@ export interface WalletClient extends Client {
     metadata: Metadata,
     options: Partial<CallOptions>,
     callback: (error: ServiceError | null, response: ImportTransactionsResponse) => void,
+  ): ClientUnaryCall;
+  /** Get all completed transactions including cancelled ones, sorted by timestamp and paginated */
+  getAllCompletedTransactions(
+    request: GetAllCompletedTransactionsRequest,
+    callback: (error: ServiceError | null, response: GetAllCompletedTransactionsResponse) => void,
+  ): ClientUnaryCall;
+  getAllCompletedTransactions(
+    request: GetAllCompletedTransactionsRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: GetAllCompletedTransactionsResponse) => void,
+  ): ClientUnaryCall;
+  getAllCompletedTransactions(
+    request: GetAllCompletedTransactionsRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: GetAllCompletedTransactionsResponse) => void,
+  ): ClientUnaryCall;
+  /**
+   * Gets transaction information by payment reference (PayRef)
+   *
+   * The `GetPaymentByReference` call retrieves transaction information using a 32-byte payment reference hash.
+   * PayRefs are generated as Blake2b_256(block_hash || output_hash) and provide a stable way to look up
+   * transactions even after outputs are spent.
+   *
+   * ### Request Parameters:
+   *
+   * - `payment_reference` (required):
+   *   - **Type**: `bytes` (32 bytes)
+   *   - **Description**: The payment reference hash to look up
+   *   - **Restrictions**: Must be exactly 32 bytes representing a valid PayRef
+   *
+   * ### Example JavaScript gRPC client usage:
+   *
+   * ```javascript
+   * const payref = Buffer.from('a1b2c3d4e5f6789012345678901234567890123456789012345678901234567890', 'hex');
+   * const request = { payment_reference: payref };
+   * client.getPaymentByReference(request, (err, response) => {
+   *   if (err) console.error(err);
+   *   else console.log('Transaction found:', response.transaction);
+   * });
+   * ```
+   *
+   * ### Sample JSON Response:
+   *
+   * ```json
+   * {
+   *   "transaction": {
+   *     "tx_id": 12345,
+   *     "source_address": "0x1234abcd...",
+   *     "dest_address": "0x5678efgh...",
+   *     "status": "TRANSACTION_STATUS_MINED_CONFIRMED",
+   *     "direction": "TRANSACTION_DIRECTION_INBOUND",
+   *     "amount": 1000000,
+   *     "fee": 20,
+   *     "is_cancelled": false,
+   *     "excess_sig": "0xabcdef...",
+   *     "timestamp": 1681234567,
+   *     "payment_id": "0xdeadbeef...",
+   *     "mined_in_block_height": 150000
+   *   }
+   * }
+   * ```
+   */
+  getPaymentByReference(
+    request: GetPaymentByReferenceRequest,
+    callback: (error: ServiceError | null, response: GetPaymentByReferenceResponse) => void,
+  ): ClientUnaryCall;
+  getPaymentByReference(
+    request: GetPaymentByReferenceRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: GetPaymentByReferenceResponse) => void,
+  ): ClientUnaryCall;
+  getPaymentByReference(
+    request: GetPaymentByReferenceRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: GetPaymentByReferenceResponse) => void,
   ): ClientUnaryCall;
 }
 
