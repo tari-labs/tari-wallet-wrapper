@@ -216,7 +216,6 @@ export interface ConsensusConstants {
   blockWeightKernels: Long;
   preMineValue: Long;
   maxScriptByteSize: Long;
-  validatorNodeValidityPeriod: Long;
   effectiveFromHeight: Long;
   validBlockchainVersionRange: Range | undefined;
   maxRandomxSeedHeight: Long;
@@ -234,6 +233,8 @@ export interface ConsensusConstants {
   inflationBips: Long;
   tailEpochLength: Long;
   maxBlockCoinbaseCount: Long;
+  vnRegistrationMaxVnsInitialEpoch: number;
+  vnRegistrationMaxVnsPerEpoch: number;
 }
 
 export interface ConsensusConstants_ProofOfWorkEntry {
@@ -1188,7 +1189,6 @@ function createBaseConsensusConstants(): ConsensusConstants {
     blockWeightKernels: Long.UZERO,
     preMineValue: Long.UZERO,
     maxScriptByteSize: Long.UZERO,
-    validatorNodeValidityPeriod: Long.UZERO,
     effectiveFromHeight: Long.UZERO,
     validBlockchainVersionRange: undefined,
     maxRandomxSeedHeight: Long.UZERO,
@@ -1206,6 +1206,8 @@ function createBaseConsensusConstants(): ConsensusConstants {
     inflationBips: Long.UZERO,
     tailEpochLength: Long.UZERO,
     maxBlockCoinbaseCount: Long.UZERO,
+    vnRegistrationMaxVnsInitialEpoch: 0,
+    vnRegistrationMaxVnsPerEpoch: 0,
   };
 }
 
@@ -1261,9 +1263,6 @@ export const ConsensusConstants: MessageFns<ConsensusConstants> = {
     if (!message.maxScriptByteSize.equals(Long.UZERO)) {
       writer.uint32(144).uint64(message.maxScriptByteSize.toString());
     }
-    if (!message.validatorNodeValidityPeriod.equals(Long.UZERO)) {
-      writer.uint32(152).uint64(message.validatorNodeValidityPeriod.toString());
-    }
     if (!message.effectiveFromHeight.equals(Long.UZERO)) {
       writer.uint32(160).uint64(message.effectiveFromHeight.toString());
     }
@@ -1316,6 +1315,12 @@ export const ConsensusConstants: MessageFns<ConsensusConstants> = {
     }
     if (!message.maxBlockCoinbaseCount.equals(Long.UZERO)) {
       writer.uint32(296).uint64(message.maxBlockCoinbaseCount.toString());
+    }
+    if (message.vnRegistrationMaxVnsInitialEpoch !== 0) {
+      writer.uint32(304).uint32(message.vnRegistrationMaxVnsInitialEpoch);
+    }
+    if (message.vnRegistrationMaxVnsPerEpoch !== 0) {
+      writer.uint32(312).uint32(message.vnRegistrationMaxVnsPerEpoch);
     }
     return writer;
   },
@@ -1463,14 +1468,6 @@ export const ConsensusConstants: MessageFns<ConsensusConstants> = {
           }
 
           message.maxScriptByteSize = Long.fromString(reader.uint64().toString(), true);
-          continue;
-        }
-        case 19: {
-          if (tag !== 152) {
-            break;
-          }
-
-          message.validatorNodeValidityPeriod = Long.fromString(reader.uint64().toString(), true);
           continue;
         }
         case 20: {
@@ -1622,6 +1619,22 @@ export const ConsensusConstants: MessageFns<ConsensusConstants> = {
           message.maxBlockCoinbaseCount = Long.fromString(reader.uint64().toString(), true);
           continue;
         }
+        case 38: {
+          if (tag !== 304) {
+            break;
+          }
+
+          message.vnRegistrationMaxVnsInitialEpoch = reader.uint32();
+          continue;
+        }
+        case 39: {
+          if (tag !== 312) {
+            break;
+          }
+
+          message.vnRegistrationMaxVnsPerEpoch = reader.uint32();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1659,9 +1672,6 @@ export const ConsensusConstants: MessageFns<ConsensusConstants> = {
       blockWeightKernels: isSet(object.blockWeightKernels) ? Long.fromValue(object.blockWeightKernels) : Long.UZERO,
       preMineValue: isSet(object.preMineValue) ? Long.fromValue(object.preMineValue) : Long.UZERO,
       maxScriptByteSize: isSet(object.maxScriptByteSize) ? Long.fromValue(object.maxScriptByteSize) : Long.UZERO,
-      validatorNodeValidityPeriod: isSet(object.validatorNodeValidityPeriod)
-        ? Long.fromValue(object.validatorNodeValidityPeriod)
-        : Long.UZERO,
       effectiveFromHeight: isSet(object.effectiveFromHeight) ? Long.fromValue(object.effectiveFromHeight) : Long.UZERO,
       validBlockchainVersionRange: isSet(object.validBlockchainVersionRange)
         ? Range.fromJSON(object.validBlockchainVersionRange)
@@ -1702,6 +1712,12 @@ export const ConsensusConstants: MessageFns<ConsensusConstants> = {
       maxBlockCoinbaseCount: isSet(object.maxBlockCoinbaseCount)
         ? Long.fromValue(object.maxBlockCoinbaseCount)
         : Long.UZERO,
+      vnRegistrationMaxVnsInitialEpoch: isSet(object.vnRegistrationMaxVnsInitialEpoch)
+        ? globalThis.Number(object.vnRegistrationMaxVnsInitialEpoch)
+        : 0,
+      vnRegistrationMaxVnsPerEpoch: isSet(object.vnRegistrationMaxVnsPerEpoch)
+        ? globalThis.Number(object.vnRegistrationMaxVnsPerEpoch)
+        : 0,
     };
   },
 
@@ -1754,9 +1770,6 @@ export const ConsensusConstants: MessageFns<ConsensusConstants> = {
     }
     if (!message.maxScriptByteSize.equals(Long.UZERO)) {
       obj.maxScriptByteSize = (message.maxScriptByteSize || Long.UZERO).toString();
-    }
-    if (!message.validatorNodeValidityPeriod.equals(Long.UZERO)) {
-      obj.validatorNodeValidityPeriod = (message.validatorNodeValidityPeriod || Long.UZERO).toString();
     }
     if (!message.effectiveFromHeight.equals(Long.UZERO)) {
       obj.effectiveFromHeight = (message.effectiveFromHeight || Long.UZERO).toString();
@@ -1818,6 +1831,12 @@ export const ConsensusConstants: MessageFns<ConsensusConstants> = {
     if (!message.maxBlockCoinbaseCount.equals(Long.UZERO)) {
       obj.maxBlockCoinbaseCount = (message.maxBlockCoinbaseCount || Long.UZERO).toString();
     }
+    if (message.vnRegistrationMaxVnsInitialEpoch !== 0) {
+      obj.vnRegistrationMaxVnsInitialEpoch = Math.round(message.vnRegistrationMaxVnsInitialEpoch);
+    }
+    if (message.vnRegistrationMaxVnsPerEpoch !== 0) {
+      obj.vnRegistrationMaxVnsPerEpoch = Math.round(message.vnRegistrationMaxVnsPerEpoch);
+    }
     return obj;
   },
 
@@ -1873,10 +1892,6 @@ export const ConsensusConstants: MessageFns<ConsensusConstants> = {
     message.maxScriptByteSize = (object.maxScriptByteSize !== undefined && object.maxScriptByteSize !== null)
       ? Long.fromValue(object.maxScriptByteSize)
       : Long.UZERO;
-    message.validatorNodeValidityPeriod =
-      (object.validatorNodeValidityPeriod !== undefined && object.validatorNodeValidityPeriod !== null)
-        ? Long.fromValue(object.validatorNodeValidityPeriod)
-        : Long.UZERO;
     message.effectiveFromHeight = (object.effectiveFromHeight !== undefined && object.effectiveFromHeight !== null)
       ? Long.fromValue(object.effectiveFromHeight)
       : Long.UZERO;
@@ -1939,6 +1954,8 @@ export const ConsensusConstants: MessageFns<ConsensusConstants> = {
       (object.maxBlockCoinbaseCount !== undefined && object.maxBlockCoinbaseCount !== null)
         ? Long.fromValue(object.maxBlockCoinbaseCount)
         : Long.UZERO;
+    message.vnRegistrationMaxVnsInitialEpoch = object.vnRegistrationMaxVnsInitialEpoch ?? 0;
+    message.vnRegistrationMaxVnsPerEpoch = object.vnRegistrationMaxVnsPerEpoch ?? 0;
     return message;
   },
 };

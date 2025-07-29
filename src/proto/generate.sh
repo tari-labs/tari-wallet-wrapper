@@ -9,7 +9,6 @@ PROTO_FILES=(
   "base_node.proto"
   "wallet.proto"
   "types.proto"
-  "validator_node.proto"
   "sidechain_types.proto"
   "transaction.proto"
   "network.proto"

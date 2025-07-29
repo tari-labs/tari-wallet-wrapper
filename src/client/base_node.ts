@@ -23,7 +23,7 @@ import {
 import Long from "long";
 import { Block, BlockHeader, HistoricalBlock, NewBlockTemplate, PowAlgo } from "./block";
 import { ListConnectedPeersResponse, NetworkStatusResponse, NodeIdentity, Peer, SoftwareUpdate } from "./network";
-import { TemplateRegistration } from "./sidechain_types";
+import { TemplateRegistration, ValidatorNodeRegistration } from "./sidechain_types";
 import { OutputFeatures, Transaction, TransactionOutput } from "./transaction";
 import { BlockHeight, ConsensusConstants, Empty, Signature } from "./types";
 
@@ -409,6 +409,98 @@ export interface TipInfoResponse {
   failedCheckpoints: boolean;
 }
 
+export interface ReadinessStatus {
+  state?: ReadinessStatus_State | undefined;
+  migration?: MigrationProgress | undefined;
+  timestamp: Long;
+}
+
+export enum ReadinessStatus_State {
+  NOT_READY = 0,
+  STARTING_UP = 1,
+  /** DATABASE_INITIALIZING - Database phase (10-19) */
+  DATABASE_INITIALIZING = 10,
+  /** RECOVERING_PREPARING - Recovery phase (20-29) */
+  RECOVERING_PREPARING = 20,
+  RECOVERING_REBUILDING = 21,
+  RECOVERING_REBUILDING_DATABASE = 22,
+  /** BUILDING_CONTEXT_BLOCKCHAIN - Context building phase (30-39) */
+  BUILDING_CONTEXT_BLOCKCHAIN = 32,
+  BUILDING_CONTEXT_BOOTSTRAP = 34,
+  READY = 100,
+  UNRECOGNIZED = -1,
+}
+
+export function readinessStatus_StateFromJSON(object: any): ReadinessStatus_State {
+  switch (object) {
+    case 0:
+    case "NOT_READY":
+      return ReadinessStatus_State.NOT_READY;
+    case 1:
+    case "STARTING_UP":
+      return ReadinessStatus_State.STARTING_UP;
+    case 10:
+    case "DATABASE_INITIALIZING":
+      return ReadinessStatus_State.DATABASE_INITIALIZING;
+    case 20:
+    case "RECOVERING_PREPARING":
+      return ReadinessStatus_State.RECOVERING_PREPARING;
+    case 21:
+    case "RECOVERING_REBUILDING":
+      return ReadinessStatus_State.RECOVERING_REBUILDING;
+    case 22:
+    case "RECOVERING_REBUILDING_DATABASE":
+      return ReadinessStatus_State.RECOVERING_REBUILDING_DATABASE;
+    case 32:
+    case "BUILDING_CONTEXT_BLOCKCHAIN":
+      return ReadinessStatus_State.BUILDING_CONTEXT_BLOCKCHAIN;
+    case 34:
+    case "BUILDING_CONTEXT_BOOTSTRAP":
+      return ReadinessStatus_State.BUILDING_CONTEXT_BOOTSTRAP;
+    case 100:
+    case "READY":
+      return ReadinessStatus_State.READY;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return ReadinessStatus_State.UNRECOGNIZED;
+  }
+}
+
+export function readinessStatus_StateToJSON(object: ReadinessStatus_State): string {
+  switch (object) {
+    case ReadinessStatus_State.NOT_READY:
+      return "NOT_READY";
+    case ReadinessStatus_State.STARTING_UP:
+      return "STARTING_UP";
+    case ReadinessStatus_State.DATABASE_INITIALIZING:
+      return "DATABASE_INITIALIZING";
+    case ReadinessStatus_State.RECOVERING_PREPARING:
+      return "RECOVERING_PREPARING";
+    case ReadinessStatus_State.RECOVERING_REBUILDING:
+      return "RECOVERING_REBUILDING";
+    case ReadinessStatus_State.RECOVERING_REBUILDING_DATABASE:
+      return "RECOVERING_REBUILDING_DATABASE";
+    case ReadinessStatus_State.BUILDING_CONTEXT_BLOCKCHAIN:
+      return "BUILDING_CONTEXT_BLOCKCHAIN";
+    case ReadinessStatus_State.BUILDING_CONTEXT_BOOTSTRAP:
+      return "BUILDING_CONTEXT_BOOTSTRAP";
+    case ReadinessStatus_State.READY:
+      return "READY";
+    case ReadinessStatus_State.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
+export interface MigrationProgress {
+  currentBlock: Long;
+  totalBlocks: Long;
+  progressPercentage: number;
+  currentDbVersion: Long;
+  targetDbVersion: Long;
+}
+
 /** / return type of GetNewBlockTemplate */
 export interface NewBlockTemplateResponse {
   newBlockTemplate: NewBlockTemplate | undefined;
@@ -465,15 +557,28 @@ export interface NetworkDifficultyResponse {
 
 /** A generic single value response for a specific height */
 export interface ValueAtHeightResponse {
+  /** This is the total circulating token supply up to date ('mined_rewards + spendable_pre_mine'). */
+  circulatingSupply: Long;
   /**
-   * uint64 circulating_supply = 1;    // No longer used
    * uint64 spendable_supply = 2;      // No longer used
+   * This is the block height the values are valid for.
    */
   height: Long;
+  /** This is the total mined rewards up to date, including time locked coinbase rewards that is not spendable. */
   minedRewards: Long;
+  /**
+   * This is the total spendable minded rewards up to date, which excludes all coinbase rewards that is
+   * still time locked.
+   */
   spendableRewards: Long;
+  /** This is the total spendable pre-mine tokens released up to date, i.e. not time-locked anymore. */
   spendablePreMine: Long;
+  /** This is the total spendable token supply up to date ('spendable_rewards + spendable_pre_mine'). */
   totalSpendable: Long;
+  /** This is the total pre-mine tokens in the genesis block, time-locked and not time-locked. */
+  totalPreMine: Long;
+  /** This is the total pre-mine tokens that are still time-locked up to date (`total_pre_mine - spendable_pre_mine`). */
+  timeLockedPreMine: Long;
 }
 
 /** A generic uint value */
@@ -481,9 +586,9 @@ export interface IntegerValue {
   value: Long;
 }
 
-/** A generic String value */
-export interface StringValue {
-  value: string;
+export interface BaseNodeGetVersionResponse {
+  version: string;
+  network: number;
 }
 
 /**
@@ -705,21 +810,47 @@ export interface MempoolStatsResponse {
 
 export interface GetActiveValidatorNodesRequest {
   height: Long;
+  sidechainId: Uint8Array;
 }
 
 export interface GetActiveValidatorNodesResponse {
   shardKey: Uint8Array;
   publicKey: Uint8Array;
+  sidechainId: Uint8Array;
+}
+
+export interface GetValidatorNodeChangesRequest {
+  epoch: Long;
+  sidechainId: Uint8Array;
+}
+
+export interface ValidatorNodeChange {
+  add?: ValidatorNodeChangeAdd | undefined;
+  remove?: ValidatorNodeChangeRemove | undefined;
+}
+
+export interface ValidatorNodeChangeAdd {
+  activationEpoch: Long;
+  registration: ValidatorNodeRegistration | undefined;
+  minimumValuePromise: Long;
+  shardKey: Uint8Array;
+}
+
+export interface ValidatorNodeChangeRemove {
+  publicKey: Uint8Array;
+}
+
+export interface GetValidatorNodeChangesResponse {
+  changes: ValidatorNodeChange[];
 }
 
 export interface GetShardKeyRequest {
-  height: Long;
+  epoch: Long;
   publicKey: Uint8Array;
 }
 
 export interface GetShardKeyResponse {
   shardKey: Uint8Array;
-  found: boolean;
 }
 
 export interface GetTemplateRegistrationsRequest {
@@ -773,6 +904,8 @@ export interface GetNetworkStateResponse {
   numConnections: Long;
   /** liveness results */
   livenessResults: LivenessResult[];
+  /** readiness status */
+  readinessStatus: ReadinessStatus | undefined;
 }
 
 export interface LivenessResult {
@@ -807,12 +940,16 @@ export interface PaymentReferenceResponse {
   commitment: Uint8Array;
   /** Whether this output has been spent */
   isSpent: boolean;
-  /** Height where output was spent (if spent) */
+  /** Height where output was spent - will be 0 for unspent outputs as it is not applicable */
   spentHeight: Long;
-  /** Block hash where output was spent (if spent) */
+  /** Block hash where output was spent - will be empty for unspent outputs */
   spentBlockHash: Uint8Array;
-  /** Transaction output amount will be 0 for non set a */
+  /** Minimum value promise */
   minValuePromise: Long;
+  /** Timestamp when the output was spent - will be 0 for unspent outputs as it is not applicable */
+  spentTimestamp: Long;
+  /** Output hash of the output */
+  outputHash: Uint8Array;
 }
 
 function createBaseGetAssetMetadataRequest(): GetAssetMetadataRequest {
@@ -1783,6 +1920,240 @@ export const TipInfoResponse: MessageFns<TipInfoResponse> = {
   },
 };
 
+function createBaseReadinessStatus(): ReadinessStatus {
+  return { state: undefined, migration: undefined, timestamp: Long.UZERO };
+}
+
+export const ReadinessStatus: MessageFns<ReadinessStatus> = {
+  encode(message: ReadinessStatus, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.state !== undefined) {
+      writer.uint32(8).int32(message.state);
+    }
+    if (message.migration !== undefined) {
+      MigrationProgress.encode(message.migration, writer.uint32(18).fork()).join();
+    }
+    if (!message.timestamp.equals(Long.UZERO)) {
+      writer.uint32(48).uint64(message.timestamp.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ReadinessStatus {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseReadinessStatus();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.state = reader.int32() as any;
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.migration = MigrationProgress.decode(reader, reader.uint32());
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.timestamp = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ReadinessStatus {
+    return {
+      state: isSet(object.state) ? readinessStatus_StateFromJSON(object.state) : undefined,
+      migration: isSet(object.migration) ? MigrationProgress.fromJSON(object.migration) : undefined,
+      timestamp: isSet(object.timestamp) ? Long.fromValue(object.timestamp) : Long.UZERO,
+    };
+  },
+
+  toJSON(message: ReadinessStatus): unknown {
+    const obj: any = {};
+    if (message.state !== undefined) {
+      obj.state = readinessStatus_StateToJSON(message.state);
+    }
+    if (message.migration !== undefined) {
+      obj.migration = MigrationProgress.toJSON(message.migration);
+    }
+    if (!message.timestamp.equals(Long.UZERO)) {
+      obj.timestamp = (message.timestamp || Long.UZERO).toString();
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ReadinessStatus>, I>>(base?: I): ReadinessStatus {
+    return ReadinessStatus.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ReadinessStatus>, I>>(object: I): ReadinessStatus {
+    const message = createBaseReadinessStatus();
+    message.state = object.state ?? undefined;
+    message.migration = (object.migration !== undefined && object.migration !== null)
+      ? MigrationProgress.fromPartial(object.migration)
+      : undefined;
+    message.timestamp = (object.timestamp !== undefined && object.timestamp !== null)
+      ? Long.fromValue(object.timestamp)
+      : Long.UZERO;
+    return message;
+  },
+};
+
+function createBaseMigrationProgress(): MigrationProgress {
+  return {
+    currentBlock: Long.UZERO,
+    totalBlocks: Long.UZERO,
+    progressPercentage: 0,
+    currentDbVersion: Long.UZERO,
+    targetDbVersion: Long.UZERO,
+  };
+}
+
+export const MigrationProgress: MessageFns<MigrationProgress> = {
+  encode(message: MigrationProgress, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (!message.currentBlock.equals(Long.UZERO)) {
+      writer.uint32(8).uint64(message.currentBlock.toString());
+    }
+    if (!message.totalBlocks.equals(Long.UZERO)) {
+      writer.uint32(16).uint64(message.totalBlocks.toString());
+    }
+    if (message.progressPercentage !== 0) {
+      writer.uint32(25).double(message.progressPercentage);
+    }
+    if (!message.currentDbVersion.equals(Long.UZERO)) {
+      writer.uint32(32).uint64(message.currentDbVersion.toString());
+    }
+    if (!message.targetDbVersion.equals(Long.UZERO)) {
+      writer.uint32(40).uint64(message.targetDbVersion.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MigrationProgress {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMigrationProgress();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.currentBlock = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.totalBlocks = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 3: {
+          if (tag !== 25) {
+            break;
+          }
+
+          message.progressPercentage = reader.double();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.currentDbVersion = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.targetDbVersion = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MigrationProgress {
+    return {
+      currentBlock: isSet(object.currentBlock) ? Long.fromValue(object.currentBlock) : Long.UZERO,
+      totalBlocks: isSet(object.totalBlocks) ? Long.fromValue(object.totalBlocks) : Long.UZERO,
+      progressPercentage: isSet(object.progressPercentage) ? globalThis.Number(object.progressPercentage) : 0,
+      currentDbVersion: isSet(object.currentDbVersion) ? Long.fromValue(object.currentDbVersion) : Long.UZERO,
+      targetDbVersion: isSet(object.targetDbVersion) ? Long.fromValue(object.targetDbVersion) : Long.UZERO,
+    };
+  },
+
+  toJSON(message: MigrationProgress): unknown {
+    const obj: any = {};
+    if (!message.currentBlock.equals(Long.UZERO)) {
+      obj.currentBlock = (message.currentBlock || Long.UZERO).toString();
+    }
+    if (!message.totalBlocks.equals(Long.UZERO)) {
+      obj.totalBlocks = (message.totalBlocks || Long.UZERO).toString();
+    }
+    if (message.progressPercentage !== 0) {
+      obj.progressPercentage = message.progressPercentage;
+    }
+    if (!message.currentDbVersion.equals(Long.UZERO)) {
+      obj.currentDbVersion = (message.currentDbVersion || Long.UZERO).toString();
+    }
+    if (!message.targetDbVersion.equals(Long.UZERO)) {
+      obj.targetDbVersion = (message.targetDbVersion || Long.UZERO).toString();
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<MigrationProgress>, I>>(base?: I): MigrationProgress {
+    return MigrationProgress.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<MigrationProgress>, I>>(object: I): MigrationProgress {
+    const message = createBaseMigrationProgress();
+    message.currentBlock = (object.currentBlock !== undefined && object.currentBlock !== null)
+      ? Long.fromValue(object.currentBlock)
+      : Long.UZERO;
+    message.totalBlocks = (object.totalBlocks !== undefined && object.totalBlocks !== null)
+      ? Long.fromValue(object.totalBlocks)
+      : Long.UZERO;
+    message.progressPercentage = object.progressPercentage ?? 0;
+    message.currentDbVersion = (object.currentDbVersion !== undefined && object.currentDbVersion !== null)
+      ? Long.fromValue(object.currentDbVersion)
+      : Long.UZERO;
+    message.targetDbVersion = (object.targetDbVersion !== undefined && object.targetDbVersion !== null)
+      ? Long.fromValue(object.targetDbVersion)
+      : Long.UZERO;
+    return message;
+  },
+};
+
 function createBaseNewBlockTemplateResponse(): NewBlockTemplateResponse {
   return { newBlockTemplate: undefined, initialSyncAchieved: false, minerData: undefined };
 }
@@ -2515,16 +2886,22 @@ export const NetworkDifficultyResponse: MessageFns<NetworkDifficultyResponse> = 
 
 function createBaseValueAtHeightResponse(): ValueAtHeightResponse {
   return {
+    circulatingSupply: Long.UZERO,
     height: Long.UZERO,
     minedRewards: Long.UZERO,
     spendableRewards: Long.UZERO,
     spendablePreMine: Long.UZERO,
     totalSpendable: Long.UZERO,
+    totalPreMine: Long.UZERO,
+    timeLockedPreMine: Long.UZERO,
   };
 }
 
 export const ValueAtHeightResponse: MessageFns<ValueAtHeightResponse> = {
   encode(message: ValueAtHeightResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (!message.circulatingSupply.equals(Long.UZERO)) {
+      writer.uint32(8).uint64(message.circulatingSupply.toString());
+    }
     if (!message.height.equals(Long.UZERO)) {
       writer.uint32(24).uint64(message.height.toString());
     }
@@ -2540,6 +2917,12 @@ export const ValueAtHeightResponse: MessageFns<ValueAtHeightResponse> = {
     if (!message.totalSpendable.equals(Long.UZERO)) {
       writer.uint32(56).uint64(message.totalSpendable.toString());
     }
+    if (!message.totalPreMine.equals(Long.UZERO)) {
+      writer.uint32(64).uint64(message.totalPreMine.toString());
+    }
+    if (!message.timeLockedPreMine.equals(Long.UZERO)) {
+      writer.uint32(72).uint64(message.timeLockedPreMine.toString());
+    }
     return writer;
   },
 
@@ -2550,6 +2933,14 @@ export const ValueAtHeightResponse: MessageFns<ValueAtHeightResponse> = {
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.circulatingSupply = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
         case 3: {
           if (tag !== 24) {
             break;
@@ -2590,6 +2981,22 @@ export const ValueAtHeightResponse: MessageFns<ValueAtHeightResponse> = {
           message.totalSpendable = Long.fromString(reader.uint64().toString(), true);
           continue;
         }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.totalPreMine = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.timeLockedPreMine = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2601,16 +3008,22 @@ export const ValueAtHeightResponse: MessageFns<ValueAtHeightResponse> = {
 
   fromJSON(object: any): ValueAtHeightResponse {
     return {
+      circulatingSupply: isSet(object.circulatingSupply) ? Long.fromValue(object.circulatingSupply) : Long.UZERO,
       height: isSet(object.height) ? Long.fromValue(object.height) : Long.UZERO,
       minedRewards: isSet(object.minedRewards) ? Long.fromValue(object.minedRewards) : Long.UZERO,
       spendableRewards: isSet(object.spendableRewards) ? Long.fromValue(object.spendableRewards) : Long.UZERO,
       spendablePreMine: isSet(object.spendablePreMine) ? Long.fromValue(object.spendablePreMine) : Long.UZERO,
       totalSpendable: isSet(object.totalSpendable) ? Long.fromValue(object.totalSpendable) : Long.UZERO,
+      totalPreMine: isSet(object.totalPreMine) ? Long.fromValue(object.totalPreMine) : Long.UZERO,
+      timeLockedPreMine: isSet(object.timeLockedPreMine) ? Long.fromValue(object.timeLockedPreMine) : Long.UZERO,
     };
   },
 
   toJSON(message: ValueAtHeightResponse): unknown {
     const obj: any = {};
+    if (!message.circulatingSupply.equals(Long.UZERO)) {
+      obj.circulatingSupply = (message.circulatingSupply || Long.UZERO).toString();
+    }
     if (!message.height.equals(Long.UZERO)) {
       obj.height = (message.height || Long.UZERO).toString();
     }
@@ -2626,6 +3039,12 @@ export const ValueAtHeightResponse: MessageFns<ValueAtHeightResponse> = {
     if (!message.totalSpendable.equals(Long.UZERO)) {
       obj.totalSpendable = (message.totalSpendable || Long.UZERO).toString();
     }
+    if (!message.totalPreMine.equals(Long.UZERO)) {
+      obj.totalPreMine = (message.totalPreMine || Long.UZERO).toString();
+    }
+    if (!message.timeLockedPreMine.equals(Long.UZERO)) {
+      obj.timeLockedPreMine = (message.timeLockedPreMine || Long.UZERO).toString();
+    }
     return obj;
   },
 
@@ -2634,6 +3053,9 @@ export const ValueAtHeightResponse: MessageFns<ValueAtHeightResponse> = {
   },
   fromPartial<I extends Exact<DeepPartial<ValueAtHeightResponse>, I>>(object: I): ValueAtHeightResponse {
     const message = createBaseValueAtHeightResponse();
+    message.circulatingSupply = (object.circulatingSupply !== undefined && object.circulatingSupply !== null)
+      ? Long.fromValue(object.circulatingSupply)
+      : Long.UZERO;
     message.height = (object.height !== undefined && object.height !== null)
       ? Long.fromValue(object.height)
       : Long.UZERO;
@@ -2648,6 +3070,12 @@ export const ValueAtHeightResponse: MessageFns<ValueAtHeightResponse> = {
       : Long.UZERO;
     message.totalSpendable = (object.totalSpendable !== undefined && object.totalSpendable !== null)
       ? Long.fromValue(object.totalSpendable)
+      : Long.UZERO;
+    message.totalPreMine = (object.totalPreMine !== undefined && object.totalPreMine !== null)
+      ? Long.fromValue(object.totalPreMine)
+      : Long.UZERO;
+    message.timeLockedPreMine = (object.timeLockedPreMine !== undefined && object.timeLockedPreMine !== null)
+      ? Long.fromValue(object.timeLockedPreMine)
       : Long.UZERO;
     return message;
   },
@@ -2711,22 +3139,25 @@ export const IntegerValue: MessageFns<IntegerValue> = {
   },
 };
 
-function createBaseStringValue(): StringValue {
-  return { value: "" };
+function createBaseBaseNodeGetVersionResponse(): BaseNodeGetVersionResponse {
+  return { version: "", network: 0 };
 }
 
-export const StringValue: MessageFns<StringValue> = {
-  encode(message: StringValue, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.value !== "") {
-      writer.uint32(10).string(message.value);
+export const BaseNodeGetVersionResponse: MessageFns<BaseNodeGetVersionResponse> = {
+  encode(message: BaseNodeGetVersionResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.version !== "") {
+      writer.uint32(10).string(message.version);
+    }
+    if (message.network !== 0) {
+      writer.uint32(16).uint32(message.network);
     }
     return writer;
   },
 
-  decode(input: BinaryReader | Uint8Array, length?: number): StringValue {
+  decode(input: BinaryReader | Uint8Array, length?: number): BaseNodeGetVersionResponse {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseStringValue();
+    const message = createBaseBaseNodeGetVersionResponse();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
@@ -2735,7 +3166,15 @@ export const StringValue: MessageFns<StringValue> = {
             break;
           }
 
-          message.value = reader.string();
+          message.version = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.network = reader.uint32();
           continue;
         }
       }
@@ -2747,24 +3186,31 @@ export const StringValue: MessageFns<StringValue> = {
     return message;
   },
 
-  fromJSON(object: any): StringValue {
-    return { value: isSet(object.value) ? globalThis.String(object.value) : "" };
+  fromJSON(object: any): BaseNodeGetVersionResponse {
+    return {
+      version: isSet(object.version) ? globalThis.String(object.version) : "",
+      network: isSet(object.network) ? globalThis.Number(object.network) : 0,
+    };
   },
 
-  toJSON(message: StringValue): unknown {
+  toJSON(message: BaseNodeGetVersionResponse): unknown {
     const obj: any = {};
-    if (message.value !== "") {
-      obj.value = message.value;
+    if (message.version !== "") {
+      obj.version = message.version;
+    }
+    if (message.network !== 0) {
+      obj.network = Math.round(message.network);
     }
     return obj;
   },
 
-  create<I extends Exact<DeepPartial<StringValue>, I>>(base?: I): StringValue {
-    return StringValue.fromPartial(base ?? ({} as any));
+  create<I extends Exact<DeepPartial<BaseNodeGetVersionResponse>, I>>(base?: I): BaseNodeGetVersionResponse {
+    return BaseNodeGetVersionResponse.fromPartial(base ?? ({} as any));
   },
-  fromPartial<I extends Exact<DeepPartial<StringValue>, I>>(object: I): StringValue {
-    const message = createBaseStringValue();
-    message.value = object.value ?? "";
+  fromPartial<I extends Exact<DeepPartial<BaseNodeGetVersionResponse>, I>>(object: I): BaseNodeGetVersionResponse {
+    const message = createBaseBaseNodeGetVersionResponse();
+    message.version = object.version ?? "";
+    message.network = object.network ?? 0;
     return message;
   },
 };
@@ -5151,13 +5597,16 @@ export const MempoolStatsResponse: MessageFns<MempoolStatsResponse> = {
 };
 
 function createBaseGetActiveValidatorNodesRequest(): GetActiveValidatorNodesRequest {
-  return { height: Long.UZERO };
+  return { height: Long.UZERO, sidechainId: new Uint8Array(0) };
 }
 
 export const GetActiveValidatorNodesRequest: MessageFns<GetActiveValidatorNodesRequest> = {
   encode(message: GetActiveValidatorNodesRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (!message.height.equals(Long.UZERO)) {
       writer.uint32(8).uint64(message.height.toString());
+    }
+    if (message.sidechainId.length !== 0) {
+      writer.uint32(18).bytes(message.sidechainId);
     }
     return writer;
   },
@@ -5177,6 +5626,14 @@ export const GetActiveValidatorNodesRequest: MessageFns<GetActiveValidatorNodesR
           message.height = Long.fromString(reader.uint64().toString(), true);
           continue;
         }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.sidechainId = reader.bytes();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -5187,13 +5644,19 @@ export const GetActiveValidatorNodesRequest: MessageFns<GetActiveValidatorNodesR
   },
 
   fromJSON(object: any): GetActiveValidatorNodesRequest {
-    return { height: isSet(object.height) ? Long.fromValue(object.height) : Long.UZERO };
+    return {
+      height: isSet(object.height) ? Long.fromValue(object.height) : Long.UZERO,
+      sidechainId: isSet(object.sidechainId) ? bytesFromBase64(object.sidechainId) : new Uint8Array(0),
+    };
   },
 
   toJSON(message: GetActiveValidatorNodesRequest): unknown {
     const obj: any = {};
     if (!message.height.equals(Long.UZERO)) {
       obj.height = (message.height || Long.UZERO).toString();
+    }
+    if (message.sidechainId.length !== 0) {
+      obj.sidechainId = base64FromBytes(message.sidechainId);
     }
     return obj;
   },
@@ -5208,12 +5671,13 @@ export const GetActiveValidatorNodesRequest: MessageFns<GetActiveValidatorNodesR
     message.height = (object.height !== undefined && object.height !== null)
       ? Long.fromValue(object.height)
       : Long.UZERO;
+    message.sidechainId = object.sidechainId ?? new Uint8Array(0);
     return message;
   },
 };
 
 function createBaseGetActiveValidatorNodesResponse(): GetActiveValidatorNodesResponse {
-  return { shardKey: new Uint8Array(0), publicKey: new Uint8Array(0) };
+  return { shardKey: new Uint8Array(0), publicKey: new Uint8Array(0), sidechainId: new Uint8Array(0) };
 }
 
 export const GetActiveValidatorNodesResponse: MessageFns<GetActiveValidatorNodesResponse> = {
@@ -5223,6 +5687,9 @@ export const GetActiveValidatorNodesResponse: MessageFns<GetActiveValidatorNodes
     }
     if (message.publicKey.length !== 0) {
       writer.uint32(18).bytes(message.publicKey);
+    }
+    if (message.sidechainId.length !== 0) {
+      writer.uint32(26).bytes(message.sidechainId);
     }
     return writer;
   },
@@ -5250,6 +5717,14 @@ export const GetActiveValidatorNodesResponse: MessageFns<GetActiveValidatorNodes
           message.publicKey = reader.bytes();
           continue;
         }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.sidechainId = reader.bytes();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -5263,6 +5738,7 @@ export const GetActiveValidatorNodesResponse: MessageFns<GetActiveValidatorNodes
     return {
       shardKey: isSet(object.shardKey) ? bytesFromBase64(object.shardKey) : new Uint8Array(0),
       publicKey: isSet(object.publicKey) ? bytesFromBase64(object.publicKey) : new Uint8Array(0),
+      sidechainId: isSet(object.sidechainId) ? bytesFromBase64(object.sidechainId) : new Uint8Array(0),
     };
   },
 
@@ -5273,6 +5749,9 @@ export const GetActiveValidatorNodesResponse: MessageFns<GetActiveValidatorNodes
     }
     if (message.publicKey.length !== 0) {
       obj.publicKey = base64FromBytes(message.publicKey);
+    }
+    if (message.sidechainId.length !== 0) {
+      obj.sidechainId = base64FromBytes(message.sidechainId);
     }
     return obj;
   },
@@ -5286,18 +5765,418 @@ export const GetActiveValidatorNodesResponse: MessageFns<GetActiveValidatorNodes
     const message = createBaseGetActiveValidatorNodesResponse();
     message.shardKey = object.shardKey ?? new Uint8Array(0);
     message.publicKey = object.publicKey ?? new Uint8Array(0);
+    message.sidechainId = object.sidechainId ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseGetValidatorNodeChangesRequest(): GetValidatorNodeChangesRequest {
+  return { epoch: Long.UZERO, sidechainId: new Uint8Array(0) };
+}
+
+export const GetValidatorNodeChangesRequest: MessageFns<GetValidatorNodeChangesRequest> = {
+  encode(message: GetValidatorNodeChangesRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (!message.epoch.equals(Long.UZERO)) {
+      writer.uint32(8).uint64(message.epoch.toString());
+    }
+    if (message.sidechainId.length !== 0) {
+      writer.uint32(18).bytes(message.sidechainId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetValidatorNodeChangesRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetValidatorNodeChangesRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.epoch = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.sidechainId = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GetValidatorNodeChangesRequest {
+    return {
+      epoch: isSet(object.epoch) ? Long.fromValue(object.epoch) : Long.UZERO,
+      sidechainId: isSet(object.sidechainId) ? bytesFromBase64(object.sidechainId) : new Uint8Array(0),
+    };
+  },
+
+  toJSON(message: GetValidatorNodeChangesRequest): unknown {
+    const obj: any = {};
+    if (!message.epoch.equals(Long.UZERO)) {
+      obj.epoch = (message.epoch || Long.UZERO).toString();
+    }
+    if (message.sidechainId.length !== 0) {
+      obj.sidechainId = base64FromBytes(message.sidechainId);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<GetValidatorNodeChangesRequest>, I>>(base?: I): GetValidatorNodeChangesRequest {
+    return GetValidatorNodeChangesRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GetValidatorNodeChangesRequest>, I>>(
+    object: I,
+  ): GetValidatorNodeChangesRequest {
+    const message = createBaseGetValidatorNodeChangesRequest();
+    message.epoch = (object.epoch !== undefined && object.epoch !== null) ? Long.fromValue(object.epoch) : Long.UZERO;
+    message.sidechainId = object.sidechainId ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseValidatorNodeChange(): ValidatorNodeChange {
+  return { add: undefined, remove: undefined };
+}
+
+export const ValidatorNodeChange: MessageFns<ValidatorNodeChange> = {
+  encode(message: ValidatorNodeChange, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.add !== undefined) {
+      ValidatorNodeChangeAdd.encode(message.add, writer.uint32(10).fork()).join();
+    }
+    if (message.remove !== undefined) {
+      ValidatorNodeChangeRemove.encode(message.remove, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ValidatorNodeChange {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseValidatorNodeChange();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.add = ValidatorNodeChangeAdd.decode(reader, reader.uint32());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.remove = ValidatorNodeChangeRemove.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ValidatorNodeChange {
+    return {
+      add: isSet(object.add) ? ValidatorNodeChangeAdd.fromJSON(object.add) : undefined,
+      remove: isSet(object.remove) ? ValidatorNodeChangeRemove.fromJSON(object.remove) : undefined,
+    };
+  },
+
+  toJSON(message: ValidatorNodeChange): unknown {
+    const obj: any = {};
+    if (message.add !== undefined) {
+      obj.add = ValidatorNodeChangeAdd.toJSON(message.add);
+    }
+    if (message.remove !== undefined) {
+      obj.remove = ValidatorNodeChangeRemove.toJSON(message.remove);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ValidatorNodeChange>, I>>(base?: I): ValidatorNodeChange {
+    return ValidatorNodeChange.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ValidatorNodeChange>, I>>(object: I): ValidatorNodeChange {
+    const message = createBaseValidatorNodeChange();
+    message.add = (object.add !== undefined && object.add !== null)
+      ? ValidatorNodeChangeAdd.fromPartial(object.add)
+      : undefined;
+    message.remove = (object.remove !== undefined && object.remove !== null)
+      ? ValidatorNodeChangeRemove.fromPartial(object.remove)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseValidatorNodeChangeAdd(): ValidatorNodeChangeAdd {
+  return {
+    activationEpoch: Long.UZERO,
+    registration: undefined,
+    minimumValuePromise: Long.UZERO,
+    shardKey: new Uint8Array(0),
+  };
+}
+
+export const ValidatorNodeChangeAdd: MessageFns<ValidatorNodeChangeAdd> = {
+  encode(message: ValidatorNodeChangeAdd, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (!message.activationEpoch.equals(Long.UZERO)) {
+      writer.uint32(8).uint64(message.activationEpoch.toString());
+    }
+    if (message.registration !== undefined) {
+      ValidatorNodeRegistration.encode(message.registration, writer.uint32(18).fork()).join();
+    }
+    if (!message.minimumValuePromise.equals(Long.UZERO)) {
+      writer.uint32(24).uint64(message.minimumValuePromise.toString());
+    }
+    if (message.shardKey.length !== 0) {
+      writer.uint32(34).bytes(message.shardKey);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ValidatorNodeChangeAdd {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseValidatorNodeChangeAdd();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.activationEpoch = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.registration = ValidatorNodeRegistration.decode(reader, reader.uint32());
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.minimumValuePromise = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.shardKey = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ValidatorNodeChangeAdd {
+    return {
+      activationEpoch: isSet(object.activationEpoch) ? Long.fromValue(object.activationEpoch) : Long.UZERO,
+      registration: isSet(object.registration) ? ValidatorNodeRegistration.fromJSON(object.registration) : undefined,
+      minimumValuePromise: isSet(object.minimumValuePromise) ? Long.fromValue(object.minimumValuePromise) : Long.UZERO,
+      shardKey: isSet(object.shardKey) ? bytesFromBase64(object.shardKey) : new Uint8Array(0),
+    };
+  },
+
+  toJSON(message: ValidatorNodeChangeAdd): unknown {
+    const obj: any = {};
+    if (!message.activationEpoch.equals(Long.UZERO)) {
+      obj.activationEpoch = (message.activationEpoch || Long.UZERO).toString();
+    }
+    if (message.registration !== undefined) {
+      obj.registration = ValidatorNodeRegistration.toJSON(message.registration);
+    }
+    if (!message.minimumValuePromise.equals(Long.UZERO)) {
+      obj.minimumValuePromise = (message.minimumValuePromise || Long.UZERO).toString();
+    }
+    if (message.shardKey.length !== 0) {
+      obj.shardKey = base64FromBytes(message.shardKey);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ValidatorNodeChangeAdd>, I>>(base?: I): ValidatorNodeChangeAdd {
+    return ValidatorNodeChangeAdd.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ValidatorNodeChangeAdd>, I>>(object: I): ValidatorNodeChangeAdd {
+    const message = createBaseValidatorNodeChangeAdd();
+    message.activationEpoch = (object.activationEpoch !== undefined && object.activationEpoch !== null)
+      ? Long.fromValue(object.activationEpoch)
+      : Long.UZERO;
+    message.registration = (object.registration !== undefined && object.registration !== null)
+      ? ValidatorNodeRegistration.fromPartial(object.registration)
+      : undefined;
+    message.minimumValuePromise = (object.minimumValuePromise !== undefined && object.minimumValuePromise !== null)
+      ? Long.fromValue(object.minimumValuePromise)
+      : Long.UZERO;
+    message.shardKey = object.shardKey ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseValidatorNodeChangeRemove(): ValidatorNodeChangeRemove {
+  return { publicKey: new Uint8Array(0) };
+}
+
+export const ValidatorNodeChangeRemove: MessageFns<ValidatorNodeChangeRemove> = {
+  encode(message: ValidatorNodeChangeRemove, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.publicKey.length !== 0) {
+      writer.uint32(10).bytes(message.publicKey);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ValidatorNodeChangeRemove {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseValidatorNodeChangeRemove();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.publicKey = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ValidatorNodeChangeRemove {
+    return { publicKey: isSet(object.publicKey) ? bytesFromBase64(object.publicKey) : new Uint8Array(0) };
+  },
+
+  toJSON(message: ValidatorNodeChangeRemove): unknown {
+    const obj: any = {};
+    if (message.publicKey.length !== 0) {
+      obj.publicKey = base64FromBytes(message.publicKey);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ValidatorNodeChangeRemove>, I>>(base?: I): ValidatorNodeChangeRemove {
+    return ValidatorNodeChangeRemove.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ValidatorNodeChangeRemove>, I>>(object: I): ValidatorNodeChangeRemove {
+    const message = createBaseValidatorNodeChangeRemove();
+    message.publicKey = object.publicKey ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseGetValidatorNodeChangesResponse(): GetValidatorNodeChangesResponse {
+  return { changes: [] };
+}
+
+export const GetValidatorNodeChangesResponse: MessageFns<GetValidatorNodeChangesResponse> = {
+  encode(message: GetValidatorNodeChangesResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.changes) {
+      ValidatorNodeChange.encode(v!, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetValidatorNodeChangesResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetValidatorNodeChangesResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.changes.push(ValidatorNodeChange.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GetValidatorNodeChangesResponse {
+    return {
+      changes: globalThis.Array.isArray(object?.changes)
+        ? object.changes.map((e: any) => ValidatorNodeChange.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: GetValidatorNodeChangesResponse): unknown {
+    const obj: any = {};
+    if (message.changes?.length) {
+      obj.changes = message.changes.map((e) => ValidatorNodeChange.toJSON(e));
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<GetValidatorNodeChangesResponse>, I>>(base?: I): GetValidatorNodeChangesResponse {
+    return GetValidatorNodeChangesResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GetValidatorNodeChangesResponse>, I>>(
+    object: I,
+  ): GetValidatorNodeChangesResponse {
+    const message = createBaseGetValidatorNodeChangesResponse();
+    message.changes = object.changes?.map((e) => ValidatorNodeChange.fromPartial(e)) || [];
     return message;
   },
 };
 
 function createBaseGetShardKeyRequest(): GetShardKeyRequest {
-  return { height: Long.UZERO, publicKey: new Uint8Array(0) };
+  return { epoch: Long.UZERO, publicKey: new Uint8Array(0) };
 }
 
 export const GetShardKeyRequest: MessageFns<GetShardKeyRequest> = {
   encode(message: GetShardKeyRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (!message.height.equals(Long.UZERO)) {
-      writer.uint32(8).uint64(message.height.toString());
+    if (!message.epoch.equals(Long.UZERO)) {
+      writer.uint32(8).uint64(message.epoch.toString());
     }
     if (message.publicKey.length !== 0) {
       writer.uint32(18).bytes(message.publicKey);
@@ -5317,7 +6196,7 @@ export const GetShardKeyRequest: MessageFns<GetShardKeyRequest> = {
             break;
           }
 
-          message.height = Long.fromString(reader.uint64().toString(), true);
+          message.epoch = Long.fromString(reader.uint64().toString(), true);
           continue;
         }
         case 2: {
@@ -5339,15 +6218,15 @@ export const GetShardKeyRequest: MessageFns<GetShardKeyRequest> = {
 
   fromJSON(object: any): GetShardKeyRequest {
     return {
-      height: isSet(object.height) ? Long.fromValue(object.height) : Long.UZERO,
+      epoch: isSet(object.epoch) ? Long.fromValue(object.epoch) : Long.UZERO,
       publicKey: isSet(object.publicKey) ? bytesFromBase64(object.publicKey) : new Uint8Array(0),
     };
   },
 
   toJSON(message: GetShardKeyRequest): unknown {
     const obj: any = {};
-    if (!message.height.equals(Long.UZERO)) {
-      obj.height = (message.height || Long.UZERO).toString();
+    if (!message.epoch.equals(Long.UZERO)) {
+      obj.epoch = (message.epoch || Long.UZERO).toString();
     }
     if (message.publicKey.length !== 0) {
       obj.publicKey = base64FromBytes(message.publicKey);
@@ -5360,25 +6239,20 @@ export const GetShardKeyRequest: MessageFns<GetShardKeyRequest> = {
   },
   fromPartial<I extends Exact<DeepPartial<GetShardKeyRequest>, I>>(object: I): GetShardKeyRequest {
     const message = createBaseGetShardKeyRequest();
-    message.height = (object.height !== undefined && object.height !== null)
-      ? Long.fromValue(object.height)
-      : Long.UZERO;
+    message.epoch = (object.epoch !== undefined && object.epoch !== null) ? Long.fromValue(object.epoch) : Long.UZERO;
     message.publicKey = object.publicKey ?? new Uint8Array(0);
     return message;
   },
 };
 
 function createBaseGetShardKeyResponse(): GetShardKeyResponse {
-  return { shardKey: new Uint8Array(0), found: false };
+  return { shardKey: new Uint8Array(0) };
 }
 
 export const GetShardKeyResponse: MessageFns<GetShardKeyResponse> = {
   encode(message: GetShardKeyResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.shardKey.length !== 0) {
       writer.uint32(10).bytes(message.shardKey);
-    }
-    if (message.found !== false) {
-      writer.uint32(16).bool(message.found);
     }
     return writer;
   },
@@ -5398,14 +6272,6 @@ export const GetShardKeyResponse: MessageFns<GetShardKeyResponse> = {
           message.shardKey = reader.bytes();
           continue;
         }
-        case 2: {
-          if (tag !== 16) {
-            break;
-          }
-
-          message.found = reader.bool();
-          continue;
-        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -5416,19 +6282,13 @@ export const GetShardKeyResponse: MessageFns<GetShardKeyResponse> = {
   },
 
   fromJSON(object: any): GetShardKeyResponse {
-    return {
-      shardKey: isSet(object.shardKey) ? bytesFromBase64(object.shardKey) : new Uint8Array(0),
-      found: isSet(object.found) ? globalThis.Boolean(object.found) : false,
-    };
+    return { shardKey: isSet(object.shardKey) ? bytesFromBase64(object.shardKey) : new Uint8Array(0) };
   },
 
   toJSON(message: GetShardKeyResponse): unknown {
     const obj: any = {};
     if (message.shardKey.length !== 0) {
       obj.shardKey = base64FromBytes(message.shardKey);
-    }
-    if (message.found !== false) {
-      obj.found = message.found;
     }
     return obj;
   },
@@ -5439,7 +6299,6 @@ export const GetShardKeyResponse: MessageFns<GetShardKeyResponse> = {
   fromPartial<I extends Exact<DeepPartial<GetShardKeyResponse>, I>>(object: I): GetShardKeyResponse {
     const message = createBaseGetShardKeyResponse();
     message.shardKey = object.shardKey ?? new Uint8Array(0);
-    message.found = object.found ?? false;
     return message;
   },
 };
@@ -5907,6 +6766,7 @@ function createBaseGetNetworkStateResponse(): GetNetworkStateResponse {
     tariRandomxEstimatedHashRate: Long.UZERO,
     numConnections: Long.UZERO,
     livenessResults: [],
+    readinessStatus: undefined,
   };
 }
 
@@ -5941,6 +6801,9 @@ export const GetNetworkStateResponse: MessageFns<GetNetworkStateResponse> = {
     }
     for (const v of message.livenessResults) {
       LivenessResult.encode(v!, writer.uint32(74).fork()).join();
+    }
+    if (message.readinessStatus !== undefined) {
+      ReadinessStatus.encode(message.readinessStatus, writer.uint32(90).fork()).join();
     }
     return writer;
   },
@@ -6032,6 +6895,14 @@ export const GetNetworkStateResponse: MessageFns<GetNetworkStateResponse> = {
           message.livenessResults.push(LivenessResult.decode(reader, reader.uint32()));
           continue;
         }
+        case 11: {
+          if (tag !== 90) {
+            break;
+          }
+
+          message.readinessStatus = ReadinessStatus.decode(reader, reader.uint32());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -6061,6 +6932,7 @@ export const GetNetworkStateResponse: MessageFns<GetNetworkStateResponse> = {
       livenessResults: globalThis.Array.isArray(object?.livenessResults)
         ? object.livenessResults.map((e: any) => LivenessResult.fromJSON(e))
         : [],
+      readinessStatus: isSet(object.readinessStatus) ? ReadinessStatus.fromJSON(object.readinessStatus) : undefined,
     };
   },
 
@@ -6096,6 +6968,9 @@ export const GetNetworkStateResponse: MessageFns<GetNetworkStateResponse> = {
     if (message.livenessResults?.length) {
       obj.livenessResults = message.livenessResults.map((e) => LivenessResult.toJSON(e));
     }
+    if (message.readinessStatus !== undefined) {
+      obj.readinessStatus = ReadinessStatus.toJSON(message.readinessStatus);
+    }
     return obj;
   },
 
@@ -6129,6 +7004,9 @@ export const GetNetworkStateResponse: MessageFns<GetNetworkStateResponse> = {
       ? Long.fromValue(object.numConnections)
       : Long.UZERO;
     message.livenessResults = object.livenessResults?.map((e) => LivenessResult.fromPartial(e)) || [];
+    message.readinessStatus = (object.readinessStatus !== undefined && object.readinessStatus !== null)
+      ? ReadinessStatus.fromPartial(object.readinessStatus)
+      : undefined;
     return message;
   },
 };
@@ -6338,6 +7216,8 @@ function createBasePaymentReferenceResponse(): PaymentReferenceResponse {
     spentHeight: Long.UZERO,
     spentBlockHash: new Uint8Array(0),
     minValuePromise: Long.UZERO,
+    spentTimestamp: Long.UZERO,
+    outputHash: new Uint8Array(0),
   };
 }
 
@@ -6369,6 +7249,12 @@ export const PaymentReferenceResponse: MessageFns<PaymentReferenceResponse> = {
     }
     if (!message.minValuePromise.equals(Long.UZERO)) {
       writer.uint32(72).uint64(message.minValuePromise.toString());
+    }
+    if (!message.spentTimestamp.equals(Long.UZERO)) {
+      writer.uint32(80).uint64(message.spentTimestamp.toString());
+    }
+    if (message.outputHash.length !== 0) {
+      writer.uint32(90).bytes(message.outputHash);
     }
     return writer;
   },
@@ -6452,6 +7338,22 @@ export const PaymentReferenceResponse: MessageFns<PaymentReferenceResponse> = {
           message.minValuePromise = Long.fromString(reader.uint64().toString(), true);
           continue;
         }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.spentTimestamp = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 11: {
+          if (tag !== 90) {
+            break;
+          }
+
+          message.outputHash = reader.bytes();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -6472,6 +7374,8 @@ export const PaymentReferenceResponse: MessageFns<PaymentReferenceResponse> = {
       spentHeight: isSet(object.spentHeight) ? Long.fromValue(object.spentHeight) : Long.UZERO,
       spentBlockHash: isSet(object.spentBlockHash) ? bytesFromBase64(object.spentBlockHash) : new Uint8Array(0),
       minValuePromise: isSet(object.minValuePromise) ? Long.fromValue(object.minValuePromise) : Long.UZERO,
+      spentTimestamp: isSet(object.spentTimestamp) ? Long.fromValue(object.spentTimestamp) : Long.UZERO,
+      outputHash: isSet(object.outputHash) ? bytesFromBase64(object.outputHash) : new Uint8Array(0),
     };
   },
 
@@ -6504,6 +7408,12 @@ export const PaymentReferenceResponse: MessageFns<PaymentReferenceResponse> = {
     if (!message.minValuePromise.equals(Long.UZERO)) {
       obj.minValuePromise = (message.minValuePromise || Long.UZERO).toString();
     }
+    if (!message.spentTimestamp.equals(Long.UZERO)) {
+      obj.spentTimestamp = (message.spentTimestamp || Long.UZERO).toString();
+    }
+    if (message.outputHash.length !== 0) {
+      obj.outputHash = base64FromBytes(message.outputHash);
+    }
     return obj;
   },
 
@@ -6529,6 +7439,10 @@ export const PaymentReferenceResponse: MessageFns<PaymentReferenceResponse> = {
     message.minValuePromise = (object.minValuePromise !== undefined && object.minValuePromise !== null)
       ? Long.fromValue(object.minValuePromise)
       : Long.UZERO;
+    message.spentTimestamp = (object.spentTimestamp !== undefined && object.spentTimestamp !== null)
+      ? Long.fromValue(object.spentTimestamp)
+      : Long.UZERO;
+    message.outputHash = object.outputHash ?? new Uint8Array(0);
     return message;
   },
 };
@@ -6613,8 +7527,9 @@ export const BaseNodeService = {
     responseStream: false,
     requestSerialize: (value: Empty) => Buffer.from(Empty.encode(value).finish()),
     requestDeserialize: (value: Buffer) => Empty.decode(value),
-    responseSerialize: (value: StringValue) => Buffer.from(StringValue.encode(value).finish()),
-    responseDeserialize: (value: Buffer) => StringValue.decode(value),
+    responseSerialize: (value: BaseNodeGetVersionResponse) =>
+      Buffer.from(BaseNodeGetVersionResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer) => BaseNodeGetVersionResponse.decode(value),
   },
   /** Check for new updates */
   checkForUpdates: {
@@ -6877,6 +7792,17 @@ export const BaseNodeService = {
       Buffer.from(GetActiveValidatorNodesResponse.encode(value).finish()),
     responseDeserialize: (value: Buffer) => GetActiveValidatorNodesResponse.decode(value),
   },
+  getValidatorNodeChanges: {
+    path: "/tari.rpc.BaseNode/GetValidatorNodeChanges",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: GetValidatorNodeChangesRequest) =>
+      Buffer.from(GetValidatorNodeChangesRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer) => GetValidatorNodeChangesRequest.decode(value),
+    responseSerialize: (value: GetValidatorNodeChangesResponse) =>
+      Buffer.from(GetValidatorNodeChangesResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer) => GetValidatorNodeChangesResponse.decode(value),
+  },
   getShardKey: {
     path: "/tari.rpc.BaseNode/GetShardKey",
     requestStream: false,
@@ -6929,6 +7855,18 @@ export const BaseNodeService = {
       Buffer.from(PaymentReferenceResponse.encode(value).finish()),
     responseDeserialize: (value: Buffer) => PaymentReferenceResponse.decode(value),
   },
+  /** PayRef (Payment Reference) lookup for block explorers and external services via output hash */
+  searchPaymentReferencesViaOutputHash: {
+    path: "/tari.rpc.BaseNode/SearchPaymentReferencesViaOutputHash",
+    requestStream: false,
+    responseStream: true,
+    requestSerialize: (value: FetchMatchingUtxosRequest) =>
+      Buffer.from(FetchMatchingUtxosRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer) => FetchMatchingUtxosRequest.decode(value),
+    responseSerialize: (value: PaymentReferenceResponse) =>
+      Buffer.from(PaymentReferenceResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer) => PaymentReferenceResponse.decode(value),
+  },
 } as const;
 
 export interface BaseNodeServer extends UntypedServiceImplementation {
@@ -6947,7 +7885,7 @@ export interface BaseNodeServer extends UntypedServiceImplementation {
   /** Returns Block Fees */
   getBlockFees: handleUnaryCall<BlockGroupRequest, BlockGroupResponse>;
   /** Get Version */
-  getVersion: handleUnaryCall<Empty, StringValue>;
+  getVersion: handleUnaryCall<Empty, BaseNodeGetVersionResponse>;
   /** Check for new updates */
   checkForUpdates: handleUnaryCall<Empty, SoftwareUpdate>;
   /** Get coins in circulation */
@@ -6996,6 +7934,7 @@ export interface BaseNodeServer extends UntypedServiceImplementation {
   getMempoolStats: handleUnaryCall<Empty, MempoolStatsResponse>;
   /** Get VNs */
   getActiveValidatorNodes: handleServerStreamingCall<GetActiveValidatorNodesRequest, GetActiveValidatorNodesResponse>;
+  getValidatorNodeChanges: handleUnaryCall<GetValidatorNodeChangesRequest, GetValidatorNodeChangesResponse>;
   getShardKey: handleUnaryCall<GetShardKeyRequest, GetShardKeyResponse>;
   /** Get templates */
   getTemplateRegistrations: handleServerStreamingCall<GetTemplateRegistrationsRequest, GetTemplateRegistrationResponse>;
@@ -7003,6 +7942,8 @@ export interface BaseNodeServer extends UntypedServiceImplementation {
   getNetworkState: handleUnaryCall<GetNetworkStateRequest, GetNetworkStateResponse>;
   /** PayRef (Payment Reference) lookup for block explorers and external services */
   searchPaymentReferences: handleServerStreamingCall<SearchPaymentReferencesRequest, PaymentReferenceResponse>;
+  /** PayRef (Payment Reference) lookup for block explorers and external services via output hash */
+  searchPaymentReferencesViaOutputHash: handleServerStreamingCall<FetchMatchingUtxosRequest, PaymentReferenceResponse>;
 }
 
 export interface BaseNodeClient extends Client {
@@ -7101,17 +8042,20 @@ export interface BaseNodeClient extends Client {
     callback: (error: ServiceError | null, response: BlockGroupResponse) => void,
   ): ClientUnaryCall;
   /** Get Version */
-  getVersion(request: Empty, callback: (error: ServiceError | null, response: StringValue) => void): ClientUnaryCall;
+  getVersion(
+    request: Empty,
+    callback: (error: ServiceError | null, response: BaseNodeGetVersionResponse) => void,
+  ): ClientUnaryCall;
   getVersion(
     request: Empty,
     metadata: Metadata,
-    callback: (error: ServiceError | null, response: StringValue) => void,
+    callback: (error: ServiceError | null, response: BaseNodeGetVersionResponse) => void,
   ): ClientUnaryCall;
   getVersion(
     request: Empty,
     metadata: Metadata,
     options: Partial<CallOptions>,
-    callback: (error: ServiceError | null, response: StringValue) => void,
+    callback: (error: ServiceError | null, response: BaseNodeGetVersionResponse) => void,
   ): ClientUnaryCall;
   /** Check for new updates */
   checkForUpdates(
@@ -7451,6 +8395,21 @@ export interface BaseNodeClient extends Client {
     metadata?: Metadata,
     options?: Partial<CallOptions>,
   ): ClientReadableStream<GetActiveValidatorNodesResponse>;
+  getValidatorNodeChanges(
+    request: GetValidatorNodeChangesRequest,
+    callback: (error: ServiceError | null, response: GetValidatorNodeChangesResponse) => void,
+  ): ClientUnaryCall;
+  getValidatorNodeChanges(
+    request: GetValidatorNodeChangesRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: GetValidatorNodeChangesResponse) => void,
+  ): ClientUnaryCall;
+  getValidatorNodeChanges(
+    request: GetValidatorNodeChangesRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: GetValidatorNodeChangesResponse) => void,
+  ): ClientUnaryCall;
   getShardKey(
     request: GetShardKeyRequest,
     callback: (error: ServiceError | null, response: GetShardKeyResponse) => void,
@@ -7507,6 +8466,16 @@ export interface BaseNodeClient extends Client {
   ): ClientReadableStream<PaymentReferenceResponse>;
   searchPaymentReferences(
     request: SearchPaymentReferencesRequest,
+    metadata?: Metadata,
+    options?: Partial<CallOptions>,
+  ): ClientReadableStream<PaymentReferenceResponse>;
+  /** PayRef (Payment Reference) lookup for block explorers and external services via output hash */
+  searchPaymentReferencesViaOutputHash(
+    request: FetchMatchingUtxosRequest,
+    options?: Partial<CallOptions>,
+  ): ClientReadableStream<PaymentReferenceResponse>;
+  searchPaymentReferencesViaOutputHash(
+    request: FetchMatchingUtxosRequest,
     metadata?: Metadata,
     options?: Partial<CallOptions>,
   ): ClientReadableStream<PaymentReferenceResponse>;

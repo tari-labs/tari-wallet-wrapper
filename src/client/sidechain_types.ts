@@ -35,15 +35,64 @@ export const protobufPackage = "tari.rpc";
  * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+export enum QuorumDecision {
+  Accept = 0,
+  Reject = 1,
+  UNRECOGNIZED = -1,
+}
+
+export function quorumDecisionFromJSON(object: any): QuorumDecision {
+  switch (object) {
+    case 0:
+    case "Accept":
+      return QuorumDecision.Accept;
+    case 1:
+    case "Reject":
+      return QuorumDecision.Reject;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return QuorumDecision.UNRECOGNIZED;
+  }
+}
+
+export function quorumDecisionToJSON(object: QuorumDecision): string {
+  switch (object) {
+    case QuorumDecision.Accept:
+      return "Accept";
+    case QuorumDecision.Reject:
+      return "Reject";
+    case QuorumDecision.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
 export interface SideChainFeature {
   validatorNodeRegistration?: ValidatorNodeRegistration | undefined;
   templateRegistration?: TemplateRegistration | undefined;
   confidentialOutput?: ConfidentialOutputData | undefined;
+  evictionProof?: EvictionProof | undefined;
+  validatorNodeExit?: ValidatorNodeExit | undefined;
+  sidechainId: SideChainId | undefined;
+}
+
+export interface SideChainId {
+  publicKey: Uint8Array;
+  knowledgeProof: Signature | undefined;
 }
 
 export interface ValidatorNodeRegistration {
   publicKey: Uint8Array;
   signature: Signature | undefined;
+  claimPublicKey: Uint8Array;
+  maxEpoch: Long;
+}
+
+export interface ValidatorNodeExit {
+  publicKey: Uint8Array;
+  signature: Signature | undefined;
+  maxEpoch: Long;
 }
 
 export interface TemplateRegistration {
@@ -82,8 +131,83 @@ export interface BuildInfo {
   commitHash: Uint8Array;
 }
 
+export interface EvictionProof {
+  proof: CommitProof | undefined;
+}
+
+export interface CommitProof {
+  v1?: CommitProofV1 | undefined;
+}
+
+export interface CommitProofV1 {
+  command: Uint8Array;
+  commitProof: SidechainBlockCommitProof | undefined;
+  encodedInclusionProof: Uint8Array;
+}
+
+export interface SidechainBlockCommitProof {
+  header: SidechainBlockHeader | undefined;
+  proofElements: CommitProofElement[];
+}
+
+export interface CommitProofElement {
+  quorumCertificate?: QuorumCertificate | undefined;
+  dummyChain?: DummyChain | undefined;
+}
+
+export interface DummyChain {
+  chainLinks: ChainLink[];
+}
+
+export interface ChainLink {
+  headerHash: Uint8Array;
+  parentId: Uint8Array;
+}
+
+export interface SidechainBlockHeader {
+  network: number;
+  parentId: Uint8Array;
+  justifyId: Uint8Array;
+  height: Long;
+  epoch: Long;
+  shardGroup: ShardGroup | undefined;
+  proposedBy: Uint8Array;
+  stateMerkleRoot: Uint8Array;
+  commandMerkleRoot: Uint8Array;
+  signature: Signature | undefined;
+  metadataHash: Uint8Array;
+}
+
+export interface ShardGroup {
+  start: number;
+  endInclusive: number;
+}
+
+export interface EvictAtom {
+  publicKey: Uint8Array;
+}
+
+export interface QuorumCertificate {
+  headerHash: Uint8Array;
+  parentId: Uint8Array;
+  signatures: ValidatorSignature[];
+  decision: QuorumDecision;
+}
+
+export interface ValidatorSignature {
+  publicKey: Uint8Array;
+  signature: Signature | undefined;
+}
+
 function createBaseSideChainFeature(): SideChainFeature {
-  return { validatorNodeRegistration: undefined, templateRegistration: undefined, confidentialOutput: undefined };
+  return {
+    validatorNodeRegistration: undefined,
+    templateRegistration: undefined,
+    confidentialOutput: undefined,
+    evictionProof: undefined,
+    validatorNodeExit: undefined,
+    sidechainId: undefined,
+  };
 }
 
 export const SideChainFeature: MessageFns<SideChainFeature> = {
@@ -96,6 +220,15 @@ export const SideChainFeature: MessageFns<SideChainFeature> = {
     }
     if (message.confidentialOutput !== undefined) {
       ConfidentialOutputData.encode(message.confidentialOutput, writer.uint32(26).fork()).join();
+    }
+    if (message.evictionProof !== undefined) {
+      EvictionProof.encode(message.evictionProof, writer.uint32(34).fork()).join();
+    }
+    if (message.validatorNodeExit !== undefined) {
+      ValidatorNodeExit.encode(message.validatorNodeExit, writer.uint32(42).fork()).join();
+    }
+    if (message.sidechainId !== undefined) {
+      SideChainId.encode(message.sidechainId, writer.uint32(50).fork()).join();
     }
     return writer;
   },
@@ -131,6 +264,30 @@ export const SideChainFeature: MessageFns<SideChainFeature> = {
           message.confidentialOutput = ConfidentialOutputData.decode(reader, reader.uint32());
           continue;
         }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.evictionProof = EvictionProof.decode(reader, reader.uint32());
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.validatorNodeExit = ValidatorNodeExit.decode(reader, reader.uint32());
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.sidechainId = SideChainId.decode(reader, reader.uint32());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -151,6 +308,11 @@ export const SideChainFeature: MessageFns<SideChainFeature> = {
       confidentialOutput: isSet(object.confidentialOutput)
         ? ConfidentialOutputData.fromJSON(object.confidentialOutput)
         : undefined,
+      evictionProof: isSet(object.evictionProof) ? EvictionProof.fromJSON(object.evictionProof) : undefined,
+      validatorNodeExit: isSet(object.validatorNodeExit)
+        ? ValidatorNodeExit.fromJSON(object.validatorNodeExit)
+        : undefined,
+      sidechainId: isSet(object.sidechainId) ? SideChainId.fromJSON(object.sidechainId) : undefined,
     };
   },
 
@@ -164,6 +326,15 @@ export const SideChainFeature: MessageFns<SideChainFeature> = {
     }
     if (message.confidentialOutput !== undefined) {
       obj.confidentialOutput = ConfidentialOutputData.toJSON(message.confidentialOutput);
+    }
+    if (message.evictionProof !== undefined) {
+      obj.evictionProof = EvictionProof.toJSON(message.evictionProof);
+    }
+    if (message.validatorNodeExit !== undefined) {
+      obj.validatorNodeExit = ValidatorNodeExit.toJSON(message.validatorNodeExit);
+    }
+    if (message.sidechainId !== undefined) {
+      obj.sidechainId = SideChainId.toJSON(message.sidechainId);
     }
     return obj;
   },
@@ -183,12 +354,104 @@ export const SideChainFeature: MessageFns<SideChainFeature> = {
     message.confidentialOutput = (object.confidentialOutput !== undefined && object.confidentialOutput !== null)
       ? ConfidentialOutputData.fromPartial(object.confidentialOutput)
       : undefined;
+    message.evictionProof = (object.evictionProof !== undefined && object.evictionProof !== null)
+      ? EvictionProof.fromPartial(object.evictionProof)
+      : undefined;
+    message.validatorNodeExit = (object.validatorNodeExit !== undefined && object.validatorNodeExit !== null)
+      ? ValidatorNodeExit.fromPartial(object.validatorNodeExit)
+      : undefined;
+    message.sidechainId = (object.sidechainId !== undefined && object.sidechainId !== null)
+      ? SideChainId.fromPartial(object.sidechainId)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseSideChainId(): SideChainId {
+  return { publicKey: new Uint8Array(0), knowledgeProof: undefined };
+}
+
+export const SideChainId: MessageFns<SideChainId> = {
+  encode(message: SideChainId, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.publicKey.length !== 0) {
+      writer.uint32(10).bytes(message.publicKey);
+    }
+    if (message.knowledgeProof !== undefined) {
+      Signature.encode(message.knowledgeProof, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SideChainId {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSideChainId();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.publicKey = reader.bytes();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.knowledgeProof = Signature.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SideChainId {
+    return {
+      publicKey: isSet(object.publicKey) ? bytesFromBase64(object.publicKey) : new Uint8Array(0),
+      knowledgeProof: isSet(object.knowledgeProof) ? Signature.fromJSON(object.knowledgeProof) : undefined,
+    };
+  },
+
+  toJSON(message: SideChainId): unknown {
+    const obj: any = {};
+    if (message.publicKey.length !== 0) {
+      obj.publicKey = base64FromBytes(message.publicKey);
+    }
+    if (message.knowledgeProof !== undefined) {
+      obj.knowledgeProof = Signature.toJSON(message.knowledgeProof);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<SideChainId>, I>>(base?: I): SideChainId {
+    return SideChainId.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SideChainId>, I>>(object: I): SideChainId {
+    const message = createBaseSideChainId();
+    message.publicKey = object.publicKey ?? new Uint8Array(0);
+    message.knowledgeProof = (object.knowledgeProof !== undefined && object.knowledgeProof !== null)
+      ? Signature.fromPartial(object.knowledgeProof)
+      : undefined;
     return message;
   },
 };
 
 function createBaseValidatorNodeRegistration(): ValidatorNodeRegistration {
-  return { publicKey: new Uint8Array(0), signature: undefined };
+  return {
+    publicKey: new Uint8Array(0),
+    signature: undefined,
+    claimPublicKey: new Uint8Array(0),
+    maxEpoch: Long.UZERO,
+  };
 }
 
 export const ValidatorNodeRegistration: MessageFns<ValidatorNodeRegistration> = {
@@ -198,6 +461,12 @@ export const ValidatorNodeRegistration: MessageFns<ValidatorNodeRegistration> = 
     }
     if (message.signature !== undefined) {
       Signature.encode(message.signature, writer.uint32(18).fork()).join();
+    }
+    if (message.claimPublicKey.length !== 0) {
+      writer.uint32(26).bytes(message.claimPublicKey);
+    }
+    if (!message.maxEpoch.equals(Long.UZERO)) {
+      writer.uint32(32).uint64(message.maxEpoch.toString());
     }
     return writer;
   },
@@ -225,6 +494,22 @@ export const ValidatorNodeRegistration: MessageFns<ValidatorNodeRegistration> = 
           message.signature = Signature.decode(reader, reader.uint32());
           continue;
         }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.claimPublicKey = reader.bytes();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.maxEpoch = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -238,6 +523,8 @@ export const ValidatorNodeRegistration: MessageFns<ValidatorNodeRegistration> = 
     return {
       publicKey: isSet(object.publicKey) ? bytesFromBase64(object.publicKey) : new Uint8Array(0),
       signature: isSet(object.signature) ? Signature.fromJSON(object.signature) : undefined,
+      claimPublicKey: isSet(object.claimPublicKey) ? bytesFromBase64(object.claimPublicKey) : new Uint8Array(0),
+      maxEpoch: isSet(object.maxEpoch) ? Long.fromValue(object.maxEpoch) : Long.UZERO,
     };
   },
 
@@ -248,6 +535,12 @@ export const ValidatorNodeRegistration: MessageFns<ValidatorNodeRegistration> = 
     }
     if (message.signature !== undefined) {
       obj.signature = Signature.toJSON(message.signature);
+    }
+    if (message.claimPublicKey.length !== 0) {
+      obj.claimPublicKey = base64FromBytes(message.claimPublicKey);
+    }
+    if (!message.maxEpoch.equals(Long.UZERO)) {
+      obj.maxEpoch = (message.maxEpoch || Long.UZERO).toString();
     }
     return obj;
   },
@@ -261,6 +554,106 @@ export const ValidatorNodeRegistration: MessageFns<ValidatorNodeRegistration> = 
     message.signature = (object.signature !== undefined && object.signature !== null)
       ? Signature.fromPartial(object.signature)
       : undefined;
+    message.claimPublicKey = object.claimPublicKey ?? new Uint8Array(0);
+    message.maxEpoch = (object.maxEpoch !== undefined && object.maxEpoch !== null)
+      ? Long.fromValue(object.maxEpoch)
+      : Long.UZERO;
+    return message;
+  },
+};
+
+function createBaseValidatorNodeExit(): ValidatorNodeExit {
+  return { publicKey: new Uint8Array(0), signature: undefined, maxEpoch: Long.UZERO };
+}
+
+export const ValidatorNodeExit: MessageFns<ValidatorNodeExit> = {
+  encode(message: ValidatorNodeExit, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.publicKey.length !== 0) {
+      writer.uint32(10).bytes(message.publicKey);
+    }
+    if (message.signature !== undefined) {
+      Signature.encode(message.signature, writer.uint32(18).fork()).join();
+    }
+    if (!message.maxEpoch.equals(Long.UZERO)) {
+      writer.uint32(24).uint64(message.maxEpoch.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ValidatorNodeExit {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseValidatorNodeExit();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.publicKey = reader.bytes();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.signature = Signature.decode(reader, reader.uint32());
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.maxEpoch = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ValidatorNodeExit {
+    return {
+      publicKey: isSet(object.publicKey) ? bytesFromBase64(object.publicKey) : new Uint8Array(0),
+      signature: isSet(object.signature) ? Signature.fromJSON(object.signature) : undefined,
+      maxEpoch: isSet(object.maxEpoch) ? Long.fromValue(object.maxEpoch) : Long.UZERO,
+    };
+  },
+
+  toJSON(message: ValidatorNodeExit): unknown {
+    const obj: any = {};
+    if (message.publicKey.length !== 0) {
+      obj.publicKey = base64FromBytes(message.publicKey);
+    }
+    if (message.signature !== undefined) {
+      obj.signature = Signature.toJSON(message.signature);
+    }
+    if (!message.maxEpoch.equals(Long.UZERO)) {
+      obj.maxEpoch = (message.maxEpoch || Long.UZERO).toString();
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ValidatorNodeExit>, I>>(base?: I): ValidatorNodeExit {
+    return ValidatorNodeExit.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ValidatorNodeExit>, I>>(object: I): ValidatorNodeExit {
+    const message = createBaseValidatorNodeExit();
+    message.publicKey = object.publicKey ?? new Uint8Array(0);
+    message.signature = (object.signature !== undefined && object.signature !== null)
+      ? Signature.fromPartial(object.signature)
+      : undefined;
+    message.maxEpoch = (object.maxEpoch !== undefined && object.maxEpoch !== null)
+      ? Long.fromValue(object.maxEpoch)
+      : Long.UZERO;
     return message;
   },
 };
@@ -822,6 +1215,1082 @@ export const BuildInfo: MessageFns<BuildInfo> = {
     const message = createBaseBuildInfo();
     message.repoUrl = object.repoUrl ?? "";
     message.commitHash = object.commitHash ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseEvictionProof(): EvictionProof {
+  return { proof: undefined };
+}
+
+export const EvictionProof: MessageFns<EvictionProof> = {
+  encode(message: EvictionProof, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.proof !== undefined) {
+      CommitProof.encode(message.proof, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EvictionProof {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEvictionProof();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.proof = CommitProof.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EvictionProof {
+    return { proof: isSet(object.proof) ? CommitProof.fromJSON(object.proof) : undefined };
+  },
+
+  toJSON(message: EvictionProof): unknown {
+    const obj: any = {};
+    if (message.proof !== undefined) {
+      obj.proof = CommitProof.toJSON(message.proof);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<EvictionProof>, I>>(base?: I): EvictionProof {
+    return EvictionProof.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<EvictionProof>, I>>(object: I): EvictionProof {
+    const message = createBaseEvictionProof();
+    message.proof = (object.proof !== undefined && object.proof !== null)
+      ? CommitProof.fromPartial(object.proof)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseCommitProof(): CommitProof {
+  return { v1: undefined };
+}
+
+export const CommitProof: MessageFns<CommitProof> = {
+  encode(message: CommitProof, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.v1 !== undefined) {
+      CommitProofV1.encode(message.v1, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CommitProof {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCommitProof();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.v1 = CommitProofV1.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): CommitProof {
+    return { v1: isSet(object.v1) ? CommitProofV1.fromJSON(object.v1) : undefined };
+  },
+
+  toJSON(message: CommitProof): unknown {
+    const obj: any = {};
+    if (message.v1 !== undefined) {
+      obj.v1 = CommitProofV1.toJSON(message.v1);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<CommitProof>, I>>(base?: I): CommitProof {
+    return CommitProof.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CommitProof>, I>>(object: I): CommitProof {
+    const message = createBaseCommitProof();
+    message.v1 = (object.v1 !== undefined && object.v1 !== null) ? CommitProofV1.fromPartial(object.v1) : undefined;
+    return message;
+  },
+};
+
+function createBaseCommitProofV1(): CommitProofV1 {
+  return { command: new Uint8Array(0), commitProof: undefined, encodedInclusionProof: new Uint8Array(0) };
+}
+
+export const CommitProofV1: MessageFns<CommitProofV1> = {
+  encode(message: CommitProofV1, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.command.length !== 0) {
+      writer.uint32(10).bytes(message.command);
+    }
+    if (message.commitProof !== undefined) {
+      SidechainBlockCommitProof.encode(message.commitProof, writer.uint32(18).fork()).join();
+    }
+    if (message.encodedInclusionProof.length !== 0) {
+      writer.uint32(26).bytes(message.encodedInclusionProof);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CommitProofV1 {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCommitProofV1();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.command = reader.bytes();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.commitProof = SidechainBlockCommitProof.decode(reader, reader.uint32());
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.encodedInclusionProof = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): CommitProofV1 {
+    return {
+      command: isSet(object.command) ? bytesFromBase64(object.command) : new Uint8Array(0),
+      commitProof: isSet(object.commitProof) ? SidechainBlockCommitProof.fromJSON(object.commitProof) : undefined,
+      encodedInclusionProof: isSet(object.encodedInclusionProof)
+        ? bytesFromBase64(object.encodedInclusionProof)
+        : new Uint8Array(0),
+    };
+  },
+
+  toJSON(message: CommitProofV1): unknown {
+    const obj: any = {};
+    if (message.command.length !== 0) {
+      obj.command = base64FromBytes(message.command);
+    }
+    if (message.commitProof !== undefined) {
+      obj.commitProof = SidechainBlockCommitProof.toJSON(message.commitProof);
+    }
+    if (message.encodedInclusionProof.length !== 0) {
+      obj.encodedInclusionProof = base64FromBytes(message.encodedInclusionProof);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<CommitProofV1>, I>>(base?: I): CommitProofV1 {
+    return CommitProofV1.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CommitProofV1>, I>>(object: I): CommitProofV1 {
+    const message = createBaseCommitProofV1();
+    message.command = object.command ?? new Uint8Array(0);
+    message.commitProof = (object.commitProof !== undefined && object.commitProof !== null)
+      ? SidechainBlockCommitProof.fromPartial(object.commitProof)
+      : undefined;
+    message.encodedInclusionProof = object.encodedInclusionProof ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseSidechainBlockCommitProof(): SidechainBlockCommitProof {
+  return { header: undefined, proofElements: [] };
+}
+
+export const SidechainBlockCommitProof: MessageFns<SidechainBlockCommitProof> = {
+  encode(message: SidechainBlockCommitProof, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.header !== undefined) {
+      SidechainBlockHeader.encode(message.header, writer.uint32(10).fork()).join();
+    }
+    for (const v of message.proofElements) {
+      CommitProofElement.encode(v!, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SidechainBlockCommitProof {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSidechainBlockCommitProof();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.header = SidechainBlockHeader.decode(reader, reader.uint32());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.proofElements.push(CommitProofElement.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SidechainBlockCommitProof {
+    return {
+      header: isSet(object.header) ? SidechainBlockHeader.fromJSON(object.header) : undefined,
+      proofElements: globalThis.Array.isArray(object?.proofElements)
+        ? object.proofElements.map((e: any) => CommitProofElement.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: SidechainBlockCommitProof): unknown {
+    const obj: any = {};
+    if (message.header !== undefined) {
+      obj.header = SidechainBlockHeader.toJSON(message.header);
+    }
+    if (message.proofElements?.length) {
+      obj.proofElements = message.proofElements.map((e) => CommitProofElement.toJSON(e));
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<SidechainBlockCommitProof>, I>>(base?: I): SidechainBlockCommitProof {
+    return SidechainBlockCommitProof.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SidechainBlockCommitProof>, I>>(object: I): SidechainBlockCommitProof {
+    const message = createBaseSidechainBlockCommitProof();
+    message.header = (object.header !== undefined && object.header !== null)
+      ? SidechainBlockHeader.fromPartial(object.header)
+      : undefined;
+    message.proofElements = object.proofElements?.map((e) => CommitProofElement.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseCommitProofElement(): CommitProofElement {
+  return { quorumCertificate: undefined, dummyChain: undefined };
+}
+
+export const CommitProofElement: MessageFns<CommitProofElement> = {
+  encode(message: CommitProofElement, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.quorumCertificate !== undefined) {
+      QuorumCertificate.encode(message.quorumCertificate, writer.uint32(10).fork()).join();
+    }
+    if (message.dummyChain !== undefined) {
+      DummyChain.encode(message.dummyChain, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CommitProofElement {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCommitProofElement();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.quorumCertificate = QuorumCertificate.decode(reader, reader.uint32());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.dummyChain = DummyChain.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): CommitProofElement {
+    return {
+      quorumCertificate: isSet(object.quorumCertificate)
+        ? QuorumCertificate.fromJSON(object.quorumCertificate)
+        : undefined,
+      dummyChain: isSet(object.dummyChain) ? DummyChain.fromJSON(object.dummyChain) : undefined,
+    };
+  },
+
+  toJSON(message: CommitProofElement): unknown {
+    const obj: any = {};
+    if (message.quorumCertificate !== undefined) {
+      obj.quorumCertificate = QuorumCertificate.toJSON(message.quorumCertificate);
+    }
+    if (message.dummyChain !== undefined) {
+      obj.dummyChain = DummyChain.toJSON(message.dummyChain);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<CommitProofElement>, I>>(base?: I): CommitProofElement {
+    return CommitProofElement.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CommitProofElement>, I>>(object: I): CommitProofElement {
+    const message = createBaseCommitProofElement();
+    message.quorumCertificate = (object.quorumCertificate !== undefined && object.quorumCertificate !== null)
+      ? QuorumCertificate.fromPartial(object.quorumCertificate)
+      : undefined;
+    message.dummyChain = (object.dummyChain !== undefined && object.dummyChain !== null)
+      ? DummyChain.fromPartial(object.dummyChain)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseDummyChain(): DummyChain {
+  return { chainLinks: [] };
+}
+
+export const DummyChain: MessageFns<DummyChain> = {
+  encode(message: DummyChain, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.chainLinks) {
+      ChainLink.encode(v!, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): DummyChain {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseDummyChain();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.chainLinks.push(ChainLink.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): DummyChain {
+    return {
+      chainLinks: globalThis.Array.isArray(object?.chainLinks)
+        ? object.chainLinks.map((e: any) => ChainLink.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: DummyChain): unknown {
+    const obj: any = {};
+    if (message.chainLinks?.length) {
+      obj.chainLinks = message.chainLinks.map((e) => ChainLink.toJSON(e));
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<DummyChain>, I>>(base?: I): DummyChain {
+    return DummyChain.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<DummyChain>, I>>(object: I): DummyChain {
+    const message = createBaseDummyChain();
+    message.chainLinks = object.chainLinks?.map((e) => ChainLink.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseChainLink(): ChainLink {
+  return { headerHash: new Uint8Array(0), parentId: new Uint8Array(0) };
+}
+
+export const ChainLink: MessageFns<ChainLink> = {
+  encode(message: ChainLink, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.headerHash.length !== 0) {
+      writer.uint32(10).bytes(message.headerHash);
+    }
+    if (message.parentId.length !== 0) {
+      writer.uint32(18).bytes(message.parentId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ChainLink {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseChainLink();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.headerHash = reader.bytes();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.parentId = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ChainLink {
+    return {
+      headerHash: isSet(object.headerHash) ? bytesFromBase64(object.headerHash) : new Uint8Array(0),
+      parentId: isSet(object.parentId) ? bytesFromBase64(object.parentId) : new Uint8Array(0),
+    };
+  },
+
+  toJSON(message: ChainLink): unknown {
+    const obj: any = {};
+    if (message.headerHash.length !== 0) {
+      obj.headerHash = base64FromBytes(message.headerHash);
+    }
+    if (message.parentId.length !== 0) {
+      obj.parentId = base64FromBytes(message.parentId);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ChainLink>, I>>(base?: I): ChainLink {
+    return ChainLink.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ChainLink>, I>>(object: I): ChainLink {
+    const message = createBaseChainLink();
+    message.headerHash = object.headerHash ?? new Uint8Array(0);
+    message.parentId = object.parentId ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseSidechainBlockHeader(): SidechainBlockHeader {
+  return {
+    network: 0,
+    parentId: new Uint8Array(0),
+    justifyId: new Uint8Array(0),
+    height: Long.UZERO,
+    epoch: Long.UZERO,
+    shardGroup: undefined,
+    proposedBy: new Uint8Array(0),
+    stateMerkleRoot: new Uint8Array(0),
+    commandMerkleRoot: new Uint8Array(0),
+    signature: undefined,
+    metadataHash: new Uint8Array(0),
+  };
+}
+
+export const SidechainBlockHeader: MessageFns<SidechainBlockHeader> = {
+  encode(message: SidechainBlockHeader, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.network !== 0) {
+      writer.uint32(8).uint32(message.network);
+    }
+    if (message.parentId.length !== 0) {
+      writer.uint32(18).bytes(message.parentId);
+    }
+    if (message.justifyId.length !== 0) {
+      writer.uint32(26).bytes(message.justifyId);
+    }
+    if (!message.height.equals(Long.UZERO)) {
+      writer.uint32(32).uint64(message.height.toString());
+    }
+    if (!message.epoch.equals(Long.UZERO)) {
+      writer.uint32(40).uint64(message.epoch.toString());
+    }
+    if (message.shardGroup !== undefined) {
+      ShardGroup.encode(message.shardGroup, writer.uint32(50).fork()).join();
+    }
+    if (message.proposedBy.length !== 0) {
+      writer.uint32(58).bytes(message.proposedBy);
+    }
+    if (message.stateMerkleRoot.length !== 0) {
+      writer.uint32(66).bytes(message.stateMerkleRoot);
+    }
+    if (message.commandMerkleRoot.length !== 0) {
+      writer.uint32(74).bytes(message.commandMerkleRoot);
+    }
+    if (message.signature !== undefined) {
+      Signature.encode(message.signature, writer.uint32(90).fork()).join();
+    }
+    if (message.metadataHash.length !== 0) {
+      writer.uint32(82).bytes(message.metadataHash);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SidechainBlockHeader {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSidechainBlockHeader();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.network = reader.uint32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.parentId = reader.bytes();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.justifyId = reader.bytes();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.height = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.epoch = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.shardGroup = ShardGroup.decode(reader, reader.uint32());
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.proposedBy = reader.bytes();
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.stateMerkleRoot = reader.bytes();
+          continue;
+        }
+        case 9: {
+          if (tag !== 74) {
+            break;
+          }
+
+          message.commandMerkleRoot = reader.bytes();
+          continue;
+        }
+        case 11: {
+          if (tag !== 90) {
+            break;
+          }
+
+          message.signature = Signature.decode(reader, reader.uint32());
+          continue;
+        }
+        case 10: {
+          if (tag !== 82) {
+            break;
+          }
+
+          message.metadataHash = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SidechainBlockHeader {
+    return {
+      network: isSet(object.network) ? globalThis.Number(object.network) : 0,
+      parentId: isSet(object.parentId) ? bytesFromBase64(object.parentId) : new Uint8Array(0),
+      justifyId: isSet(object.justifyId) ? bytesFromBase64(object.justifyId) : new Uint8Array(0),
+      height: isSet(object.height) ? Long.fromValue(object.height) : Long.UZERO,
+      epoch: isSet(object.epoch) ? Long.fromValue(object.epoch) : Long.UZERO,
+      shardGroup: isSet(object.shardGroup) ? ShardGroup.fromJSON(object.shardGroup) : undefined,
+      proposedBy: isSet(object.proposedBy) ? bytesFromBase64(object.proposedBy) : new Uint8Array(0),
+      stateMerkleRoot: isSet(object.stateMerkleRoot) ? bytesFromBase64(object.stateMerkleRoot) : new Uint8Array(0),
+      commandMerkleRoot: isSet(object.commandMerkleRoot)
+        ? bytesFromBase64(object.commandMerkleRoot)
+        : new Uint8Array(0),
+      signature: isSet(object.signature) ? Signature.fromJSON(object.signature) : undefined,
+      metadataHash: isSet(object.metadataHash) ? bytesFromBase64(object.metadataHash) : new Uint8Array(0),
+    };
+  },
+
+  toJSON(message: SidechainBlockHeader): unknown {
+    const obj: any = {};
+    if (message.network !== 0) {
+      obj.network = Math.round(message.network);
+    }
+    if (message.parentId.length !== 0) {
+      obj.parentId = base64FromBytes(message.parentId);
+    }
+    if (message.justifyId.length !== 0) {
+      obj.justifyId = base64FromBytes(message.justifyId);
+    }
+    if (!message.height.equals(Long.UZERO)) {
+      obj.height = (message.height || Long.UZERO).toString();
+    }
+    if (!message.epoch.equals(Long.UZERO)) {
+      obj.epoch = (message.epoch || Long.UZERO).toString();
+    }
+    if (message.shardGroup !== undefined) {
+      obj.shardGroup = ShardGroup.toJSON(message.shardGroup);
+    }
+    if (message.proposedBy.length !== 0) {
+      obj.proposedBy = base64FromBytes(message.proposedBy);
+    }
+    if (message.stateMerkleRoot.length !== 0) {
+      obj.stateMerkleRoot = base64FromBytes(message.stateMerkleRoot);
+    }
+    if (message.commandMerkleRoot.length !== 0) {
+      obj.commandMerkleRoot = base64FromBytes(message.commandMerkleRoot);
+    }
+    if (message.signature !== undefined) {
+      obj.signature = Signature.toJSON(message.signature);
+    }
+    if (message.metadataHash.length !== 0) {
+      obj.metadataHash = base64FromBytes(message.metadataHash);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<SidechainBlockHeader>, I>>(base?: I): SidechainBlockHeader {
+    return SidechainBlockHeader.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SidechainBlockHeader>, I>>(object: I): SidechainBlockHeader {
+    const message = createBaseSidechainBlockHeader();
+    message.network = object.network ?? 0;
+    message.parentId = object.parentId ?? new Uint8Array(0);
+    message.justifyId = object.justifyId ?? new Uint8Array(0);
+    message.height = (object.height !== undefined && object.height !== null)
+      ? Long.fromValue(object.height)
+      : Long.UZERO;
+    message.epoch = (object.epoch !== undefined && object.epoch !== null) ? Long.fromValue(object.epoch) : Long.UZERO;
+    message.shardGroup = (object.shardGroup !== undefined && object.shardGroup !== null)
+      ? ShardGroup.fromPartial(object.shardGroup)
+      : undefined;
+    message.proposedBy = object.proposedBy ?? new Uint8Array(0);
+    message.stateMerkleRoot = object.stateMerkleRoot ?? new Uint8Array(0);
+    message.commandMerkleRoot = object.commandMerkleRoot ?? new Uint8Array(0);
+    message.signature = (object.signature !== undefined && object.signature !== null)
+      ? Signature.fromPartial(object.signature)
+      : undefined;
+    message.metadataHash = object.metadataHash ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseShardGroup(): ShardGroup {
+  return { start: 0, endInclusive: 0 };
+}
+
+export const ShardGroup: MessageFns<ShardGroup> = {
+  encode(message: ShardGroup, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.start !== 0) {
+      writer.uint32(8).uint32(message.start);
+    }
+    if (message.endInclusive !== 0) {
+      writer.uint32(16).uint32(message.endInclusive);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ShardGroup {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseShardGroup();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.start = reader.uint32();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.endInclusive = reader.uint32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ShardGroup {
+    return {
+      start: isSet(object.start) ? globalThis.Number(object.start) : 0,
+      endInclusive: isSet(object.endInclusive) ? globalThis.Number(object.endInclusive) : 0,
+    };
+  },
+
+  toJSON(message: ShardGroup): unknown {
+    const obj: any = {};
+    if (message.start !== 0) {
+      obj.start = Math.round(message.start);
+    }
+    if (message.endInclusive !== 0) {
+      obj.endInclusive = Math.round(message.endInclusive);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ShardGroup>, I>>(base?: I): ShardGroup {
+    return ShardGroup.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ShardGroup>, I>>(object: I): ShardGroup {
+    const message = createBaseShardGroup();
+    message.start = object.start ?? 0;
+    message.endInclusive = object.endInclusive ?? 0;
+    return message;
+  },
+};
+
+function createBaseEvictAtom(): EvictAtom {
+  return { publicKey: new Uint8Array(0) };
+}
+
+export const EvictAtom: MessageFns<EvictAtom> = {
+  encode(message: EvictAtom, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.publicKey.length !== 0) {
+      writer.uint32(10).bytes(message.publicKey);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): EvictAtom {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEvictAtom();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.publicKey = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): EvictAtom {
+    return { publicKey: isSet(object.publicKey) ? bytesFromBase64(object.publicKey) : new Uint8Array(0) };
+  },
+
+  toJSON(message: EvictAtom): unknown {
+    const obj: any = {};
+    if (message.publicKey.length !== 0) {
+      obj.publicKey = base64FromBytes(message.publicKey);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<EvictAtom>, I>>(base?: I): EvictAtom {
+    return EvictAtom.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<EvictAtom>, I>>(object: I): EvictAtom {
+    const message = createBaseEvictAtom();
+    message.publicKey = object.publicKey ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseQuorumCertificate(): QuorumCertificate {
+  return { headerHash: new Uint8Array(0), parentId: new Uint8Array(0), signatures: [], decision: 0 };
+}
+
+export const QuorumCertificate: MessageFns<QuorumCertificate> = {
+  encode(message: QuorumCertificate, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.headerHash.length !== 0) {
+      writer.uint32(10).bytes(message.headerHash);
+    }
+    if (message.parentId.length !== 0) {
+      writer.uint32(18).bytes(message.parentId);
+    }
+    for (const v of message.signatures) {
+      ValidatorSignature.encode(v!, writer.uint32(26).fork()).join();
+    }
+    if (message.decision !== 0) {
+      writer.uint32(32).int32(message.decision);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QuorumCertificate {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQuorumCertificate();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.headerHash = reader.bytes();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.parentId = reader.bytes();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.signatures.push(ValidatorSignature.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.decision = reader.int32() as any;
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QuorumCertificate {
+    return {
+      headerHash: isSet(object.headerHash) ? bytesFromBase64(object.headerHash) : new Uint8Array(0),
+      parentId: isSet(object.parentId) ? bytesFromBase64(object.parentId) : new Uint8Array(0),
+      signatures: globalThis.Array.isArray(object?.signatures)
+        ? object.signatures.map((e: any) => ValidatorSignature.fromJSON(e))
+        : [],
+      decision: isSet(object.decision) ? quorumDecisionFromJSON(object.decision) : 0,
+    };
+  },
+
+  toJSON(message: QuorumCertificate): unknown {
+    const obj: any = {};
+    if (message.headerHash.length !== 0) {
+      obj.headerHash = base64FromBytes(message.headerHash);
+    }
+    if (message.parentId.length !== 0) {
+      obj.parentId = base64FromBytes(message.parentId);
+    }
+    if (message.signatures?.length) {
+      obj.signatures = message.signatures.map((e) => ValidatorSignature.toJSON(e));
+    }
+    if (message.decision !== 0) {
+      obj.decision = quorumDecisionToJSON(message.decision);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<QuorumCertificate>, I>>(base?: I): QuorumCertificate {
+    return QuorumCertificate.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<QuorumCertificate>, I>>(object: I): QuorumCertificate {
+    const message = createBaseQuorumCertificate();
+    message.headerHash = object.headerHash ?? new Uint8Array(0);
+    message.parentId = object.parentId ?? new Uint8Array(0);
+    message.signatures = object.signatures?.map((e) => ValidatorSignature.fromPartial(e)) || [];
+    message.decision = object.decision ?? 0;
+    return message;
+  },
+};
+
+function createBaseValidatorSignature(): ValidatorSignature {
+  return { publicKey: new Uint8Array(0), signature: undefined };
+}
+
+export const ValidatorSignature: MessageFns<ValidatorSignature> = {
+  encode(message: ValidatorSignature, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.publicKey.length !== 0) {
+      writer.uint32(10).bytes(message.publicKey);
+    }
+    if (message.signature !== undefined) {
+      Signature.encode(message.signature, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ValidatorSignature {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseValidatorSignature();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.publicKey = reader.bytes();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.signature = Signature.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ValidatorSignature {
+    return {
+      publicKey: isSet(object.publicKey) ? bytesFromBase64(object.publicKey) : new Uint8Array(0),
+      signature: isSet(object.signature) ? Signature.fromJSON(object.signature) : undefined,
+    };
+  },
+
+  toJSON(message: ValidatorSignature): unknown {
+    const obj: any = {};
+    if (message.publicKey.length !== 0) {
+      obj.publicKey = base64FromBytes(message.publicKey);
+    }
+    if (message.signature !== undefined) {
+      obj.signature = Signature.toJSON(message.signature);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ValidatorSignature>, I>>(base?: I): ValidatorSignature {
+    return ValidatorSignature.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ValidatorSignature>, I>>(object: I): ValidatorSignature {
+    const message = createBaseValidatorSignature();
+    message.publicKey = object.publicKey ?? new Uint8Array(0);
+    message.signature = (object.signature !== undefined && object.signature !== null)
+      ? Signature.fromPartial(object.signature)
+      : undefined;
     return message;
   },
 };

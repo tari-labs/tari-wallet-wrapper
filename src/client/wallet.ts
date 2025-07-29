@@ -28,7 +28,7 @@ import {
   NetworkStatusResponse,
   SoftwareUpdate,
 } from "./network";
-import { TemplateRegistration } from "./sidechain_types";
+import { BuildInfo, EvictionProof, TemplateType } from "./sidechain_types";
 import { UnblindedOutput } from "./transaction";
 import { BlockHeight, CommitmentSignature, Empty, Signature } from "./types";
 
@@ -298,6 +298,28 @@ export interface GetCompleteAddressResponse {
   oneSidedAddressEmoji: string;
 }
 
+/** A request to preapre a one sided transaction for offline signing */
+export interface PrepareOneSidedTransactionForSigningRequest {
+  recipient: PaymentRecipient | undefined;
+}
+
+export interface PrepareOneSidedTransactionForSigningResponse {
+  isSuccess: boolean;
+  result: string;
+  failureMessage: string;
+}
+
+/** A request to broadcast a signed one sided transaction */
+export interface BroadcastSignedOneSidedTransactionRequest {
+  request: string;
+}
+
+export interface BroadcastSignedOneSidedTransactionResponse {
+  isSuccess: boolean;
+  transactionId: Long;
+  failureMessage: string;
+}
+
 /** A request to send funds to one or more recipients. */
 export interface TransferRequest {
   recipients: PaymentRecipient[];
@@ -312,6 +334,7 @@ export interface CreateBurnTransactionRequest {
   feePerGram: Long;
   claimPublicKey: Uint8Array;
   paymentId: Uint8Array;
+  sidechainDeploymentKey: Uint8Array;
 }
 
 /** A recipient for a transfer, including address, amount, fee, and optional payment ID. */
@@ -506,7 +529,11 @@ export interface GetStateResponse {
     | GetBalanceResponse
     | undefined;
   /** Status of the wallet's connection to the base node, based on the NetworkStatusResponse */
-  network: NetworkStatusResponse | undefined;
+  network:
+    | NetworkStatusResponse
+    | undefined;
+  /** Has the wallet since starting, completed a validation of all outputs after scanning */
+  hasDoneInitialValidation: boolean;
 }
 
 /** Response message for GetUnspentAmounts RPC. */
@@ -550,8 +577,14 @@ export interface ImportUtxosResponse {
 }
 
 export interface CreateTemplateRegistrationRequest {
-  templateRegistration: TemplateRegistration | undefined;
   feePerGram: Long;
+  templateName: string;
+  templateVersion: number;
+  templateType: TemplateType | undefined;
+  buildInfo: BuildInfo | undefined;
+  binarySha: Uint8Array;
+  binaryUrl: string;
+  sidechainDeploymentKey: Uint8Array;
 }
 
 export interface CreateTemplateRegistrationResponse {
@@ -583,11 +616,6 @@ export interface ValidateRequest {
 }
 
 export interface ValidateResponse {
-}
-
-export interface SetBaseNodeRequest {
-  publicKeyHex: string;
-  netAddress: string;
 }
 
 export interface SetBaseNodeResponse {
@@ -657,7 +685,8 @@ export interface TransactionEvent {
   status: string;
   direction: string;
   amount: Long;
-  paymentId: Uint8Array;
+  rawPaymentId: Uint8Array;
+  userPaymentId: Uint8Array;
 }
 
 export interface TransactionEventResponse {
@@ -667,11 +696,40 @@ export interface TransactionEventResponse {
 export interface RegisterValidatorNodeRequest {
   validatorNodePublicKey: Uint8Array;
   validatorNodeSignature: Signature | undefined;
+  validatorNodeClaimPublicKey: Uint8Array;
+  maxEpoch: Long;
   feePerGram: Long;
   paymentId: Uint8Array;
+  sidechainDeploymentKey: Uint8Array;
 }
 
 export interface RegisterValidatorNodeResponse {
+  transactionId: Long;
+  isSuccess: boolean;
+  failureMessage: string;
+}
+
+export interface SubmitValidatorEvictionProofRequest {
+  proof: EvictionProof | undefined;
+  feePerGram: Long;
+  message: string;
+  sidechainDeploymentKey: Uint8Array;
+}
+
+export interface SubmitValidatorEvictionProofResponse {
+  txId: Long;
+}
+
+export interface SubmitValidatorNodeExitRequest {
+  validatorNodePublicKey: Uint8Array;
+  validatorNodeSignature: Signature | undefined;
+  maxEpoch: Long;
+  feePerGram: Long;
+  message: Uint8Array;
+  sidechainDeploymentKey: Uint8Array;
+}
+
+export interface SubmitValidatorNodeExitResponse {
   transactionId: Long;
   isSuccess: boolean;
   failureMessage: string;
@@ -687,10 +745,12 @@ export interface ImportTransactionsResponse {
 
 export interface GetAllCompletedTransactionsRequest {
   offset: Long;
+  /** limited to 50 if passed higher number than it will be reduced to 50 */
   limit: Long;
   statusBitflag: Long;
 }
 
+/** DEPRECATED: Use GetAllCompletedTransactionsStream for better performance and memory efficiency */
 export interface GetAllCompletedTransactionsResponse {
   transactions: TransactionInfo[];
 }
@@ -743,6 +803,81 @@ export interface GetPaymentByReferenceResponse {
    * Returns full transaction details
    */
   transaction: TransactionInfo | undefined;
+}
+
+export interface GetFeeEstimateRequest {
+  /** The amount to send in microTari (1 T = 1_000_000 µT). */
+  amount: Long;
+  /** fee per gram to use for the estimate */
+  feePerGram: Long;
+  /** number of outputs to create in the transaction */
+  outputCount: Long;
+}
+
+export interface GetFeeEstimateResponse {
+  /** Estimated fee for the transaction in microTari */
+  estimatedFee: Long;
+}
+
+export interface GetFeePerGramStatsRequest {
+  /** Optional: The number of recent blocks to consider for fee statistics. */
+  blockCount: Long;
+}
+
+export interface GetFeePerGramStatsResponse {
+  feePerGramStats: FeePerGramStat[];
+}
+
+export interface ReplaceByFeeRequest {
+  /** The transaction id of the transaction to replace */
+  transactionId: Long;
+  /** The amount to increase the fee by in microTari. Must be greater than zero. */
+  feeIncrease: Long;
+}
+
+export interface ReplaceByFeeResponse {
+  /** Transaction id of the new transaction */
+  transactionId: Long;
+}
+
+export interface UserPayForFeeRequest {
+  recipients: TxOutputsToSpendTransfer[];
+}
+
+export interface TxOutputsToSpendTransfer {
+  /** Id of the transaction to spend outputs from. */
+  txId: Long;
+  /** Fee to pay for the transaction in microTari. */
+  fee: Long;
+  /** Base58 Tari address of the recipient. */
+  destination: string;
+}
+
+export interface UserPayForFeeResponse {
+  results: TransferResult[];
+}
+
+export interface FeePerGramStat {
+  /** The average fee per gram over the specified number of blocks. */
+  averageFeePerGram: Long;
+  /** The minimum fee per gram observed in the recent blocks. */
+  minFeePerGram: Long;
+  /** The maximum fee per gram observed in the recent blocks. */
+  maxFeePerGram: Long;
+}
+
+/** Request message for SignMessage RPC */
+export interface SignMessageRequest {
+  /** The message to be signed (arbitrary bytes) */
+  message: Uint8Array;
+}
+
+/** Response message for SignMessage RPC */
+export interface SignMessageResponse {
+  /** The Schnorr signature as hex-encoded string */
+  signature: string;
+  /** The public nonce component as hex-encoded string */
+  publicNonce: string;
 }
 
 function createBaseGetVersionRequest(): GetVersionRequest {
@@ -1135,6 +1270,332 @@ export const GetCompleteAddressResponse: MessageFns<GetCompleteAddressResponse> 
   },
 };
 
+function createBasePrepareOneSidedTransactionForSigningRequest(): PrepareOneSidedTransactionForSigningRequest {
+  return { recipient: undefined };
+}
+
+export const PrepareOneSidedTransactionForSigningRequest: MessageFns<PrepareOneSidedTransactionForSigningRequest> = {
+  encode(
+    message: PrepareOneSidedTransactionForSigningRequest,
+    writer: BinaryWriter = new BinaryWriter(),
+  ): BinaryWriter {
+    if (message.recipient !== undefined) {
+      PaymentRecipient.encode(message.recipient, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PrepareOneSidedTransactionForSigningRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBasePrepareOneSidedTransactionForSigningRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.recipient = PaymentRecipient.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): PrepareOneSidedTransactionForSigningRequest {
+    return { recipient: isSet(object.recipient) ? PaymentRecipient.fromJSON(object.recipient) : undefined };
+  },
+
+  toJSON(message: PrepareOneSidedTransactionForSigningRequest): unknown {
+    const obj: any = {};
+    if (message.recipient !== undefined) {
+      obj.recipient = PaymentRecipient.toJSON(message.recipient);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<PrepareOneSidedTransactionForSigningRequest>, I>>(
+    base?: I,
+  ): PrepareOneSidedTransactionForSigningRequest {
+    return PrepareOneSidedTransactionForSigningRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PrepareOneSidedTransactionForSigningRequest>, I>>(
+    object: I,
+  ): PrepareOneSidedTransactionForSigningRequest {
+    const message = createBasePrepareOneSidedTransactionForSigningRequest();
+    message.recipient = (object.recipient !== undefined && object.recipient !== null)
+      ? PaymentRecipient.fromPartial(object.recipient)
+      : undefined;
+    return message;
+  },
+};
+
+function createBasePrepareOneSidedTransactionForSigningResponse(): PrepareOneSidedTransactionForSigningResponse {
+  return { isSuccess: false, result: "", failureMessage: "" };
+}
+
+export const PrepareOneSidedTransactionForSigningResponse: MessageFns<PrepareOneSidedTransactionForSigningResponse> = {
+  encode(
+    message: PrepareOneSidedTransactionForSigningResponse,
+    writer: BinaryWriter = new BinaryWriter(),
+  ): BinaryWriter {
+    if (message.isSuccess !== false) {
+      writer.uint32(8).bool(message.isSuccess);
+    }
+    if (message.result !== "") {
+      writer.uint32(18).string(message.result);
+    }
+    if (message.failureMessage !== "") {
+      writer.uint32(26).string(message.failureMessage);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PrepareOneSidedTransactionForSigningResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBasePrepareOneSidedTransactionForSigningResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.isSuccess = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.result = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.failureMessage = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): PrepareOneSidedTransactionForSigningResponse {
+    return {
+      isSuccess: isSet(object.isSuccess) ? globalThis.Boolean(object.isSuccess) : false,
+      result: isSet(object.result) ? globalThis.String(object.result) : "",
+      failureMessage: isSet(object.failureMessage) ? globalThis.String(object.failureMessage) : "",
+    };
+  },
+
+  toJSON(message: PrepareOneSidedTransactionForSigningResponse): unknown {
+    const obj: any = {};
+    if (message.isSuccess !== false) {
+      obj.isSuccess = message.isSuccess;
+    }
+    if (message.result !== "") {
+      obj.result = message.result;
+    }
+    if (message.failureMessage !== "") {
+      obj.failureMessage = message.failureMessage;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<PrepareOneSidedTransactionForSigningResponse>, I>>(
+    base?: I,
+  ): PrepareOneSidedTransactionForSigningResponse {
+    return PrepareOneSidedTransactionForSigningResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PrepareOneSidedTransactionForSigningResponse>, I>>(
+    object: I,
+  ): PrepareOneSidedTransactionForSigningResponse {
+    const message = createBasePrepareOneSidedTransactionForSigningResponse();
+    message.isSuccess = object.isSuccess ?? false;
+    message.result = object.result ?? "";
+    message.failureMessage = object.failureMessage ?? "";
+    return message;
+  },
+};
+
+function createBaseBroadcastSignedOneSidedTransactionRequest(): BroadcastSignedOneSidedTransactionRequest {
+  return { request: "" };
+}
+
+export const BroadcastSignedOneSidedTransactionRequest: MessageFns<BroadcastSignedOneSidedTransactionRequest> = {
+  encode(message: BroadcastSignedOneSidedTransactionRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.request !== "") {
+      writer.uint32(10).string(message.request);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BroadcastSignedOneSidedTransactionRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseBroadcastSignedOneSidedTransactionRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.request = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): BroadcastSignedOneSidedTransactionRequest {
+    return { request: isSet(object.request) ? globalThis.String(object.request) : "" };
+  },
+
+  toJSON(message: BroadcastSignedOneSidedTransactionRequest): unknown {
+    const obj: any = {};
+    if (message.request !== "") {
+      obj.request = message.request;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<BroadcastSignedOneSidedTransactionRequest>, I>>(
+    base?: I,
+  ): BroadcastSignedOneSidedTransactionRequest {
+    return BroadcastSignedOneSidedTransactionRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<BroadcastSignedOneSidedTransactionRequest>, I>>(
+    object: I,
+  ): BroadcastSignedOneSidedTransactionRequest {
+    const message = createBaseBroadcastSignedOneSidedTransactionRequest();
+    message.request = object.request ?? "";
+    return message;
+  },
+};
+
+function createBaseBroadcastSignedOneSidedTransactionResponse(): BroadcastSignedOneSidedTransactionResponse {
+  return { isSuccess: false, transactionId: Long.UZERO, failureMessage: "" };
+}
+
+export const BroadcastSignedOneSidedTransactionResponse: MessageFns<BroadcastSignedOneSidedTransactionResponse> = {
+  encode(message: BroadcastSignedOneSidedTransactionResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.isSuccess !== false) {
+      writer.uint32(8).bool(message.isSuccess);
+    }
+    if (!message.transactionId.equals(Long.UZERO)) {
+      writer.uint32(16).uint64(message.transactionId.toString());
+    }
+    if (message.failureMessage !== "") {
+      writer.uint32(26).string(message.failureMessage);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BroadcastSignedOneSidedTransactionResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseBroadcastSignedOneSidedTransactionResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.isSuccess = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.transactionId = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.failureMessage = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): BroadcastSignedOneSidedTransactionResponse {
+    return {
+      isSuccess: isSet(object.isSuccess) ? globalThis.Boolean(object.isSuccess) : false,
+      transactionId: isSet(object.transactionId) ? Long.fromValue(object.transactionId) : Long.UZERO,
+      failureMessage: isSet(object.failureMessage) ? globalThis.String(object.failureMessage) : "",
+    };
+  },
+
+  toJSON(message: BroadcastSignedOneSidedTransactionResponse): unknown {
+    const obj: any = {};
+    if (message.isSuccess !== false) {
+      obj.isSuccess = message.isSuccess;
+    }
+    if (!message.transactionId.equals(Long.UZERO)) {
+      obj.transactionId = (message.transactionId || Long.UZERO).toString();
+    }
+    if (message.failureMessage !== "") {
+      obj.failureMessage = message.failureMessage;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<BroadcastSignedOneSidedTransactionResponse>, I>>(
+    base?: I,
+  ): BroadcastSignedOneSidedTransactionResponse {
+    return BroadcastSignedOneSidedTransactionResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<BroadcastSignedOneSidedTransactionResponse>, I>>(
+    object: I,
+  ): BroadcastSignedOneSidedTransactionResponse {
+    const message = createBaseBroadcastSignedOneSidedTransactionResponse();
+    message.isSuccess = object.isSuccess ?? false;
+    message.transactionId = (object.transactionId !== undefined && object.transactionId !== null)
+      ? Long.fromValue(object.transactionId)
+      : Long.UZERO;
+    message.failureMessage = object.failureMessage ?? "";
+    return message;
+  },
+};
+
 function createBaseTransferRequest(): TransferRequest {
   return { recipients: [] };
 }
@@ -1263,6 +1724,7 @@ function createBaseCreateBurnTransactionRequest(): CreateBurnTransactionRequest 
     feePerGram: Long.UZERO,
     claimPublicKey: new Uint8Array(0),
     paymentId: new Uint8Array(0),
+    sidechainDeploymentKey: new Uint8Array(0),
   };
 }
 
@@ -1279,6 +1741,9 @@ export const CreateBurnTransactionRequest: MessageFns<CreateBurnTransactionReque
     }
     if (message.paymentId.length !== 0) {
       writer.uint32(42).bytes(message.paymentId);
+    }
+    if (message.sidechainDeploymentKey.length !== 0) {
+      writer.uint32(50).bytes(message.sidechainDeploymentKey);
     }
     return writer;
   },
@@ -1322,6 +1787,14 @@ export const CreateBurnTransactionRequest: MessageFns<CreateBurnTransactionReque
           message.paymentId = reader.bytes();
           continue;
         }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.sidechainDeploymentKey = reader.bytes();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1337,6 +1810,9 @@ export const CreateBurnTransactionRequest: MessageFns<CreateBurnTransactionReque
       feePerGram: isSet(object.feePerGram) ? Long.fromValue(object.feePerGram) : Long.UZERO,
       claimPublicKey: isSet(object.claimPublicKey) ? bytesFromBase64(object.claimPublicKey) : new Uint8Array(0),
       paymentId: isSet(object.paymentId) ? bytesFromBase64(object.paymentId) : new Uint8Array(0),
+      sidechainDeploymentKey: isSet(object.sidechainDeploymentKey)
+        ? bytesFromBase64(object.sidechainDeploymentKey)
+        : new Uint8Array(0),
     };
   },
 
@@ -1354,6 +1830,9 @@ export const CreateBurnTransactionRequest: MessageFns<CreateBurnTransactionReque
     if (message.paymentId.length !== 0) {
       obj.paymentId = base64FromBytes(message.paymentId);
     }
+    if (message.sidechainDeploymentKey.length !== 0) {
+      obj.sidechainDeploymentKey = base64FromBytes(message.sidechainDeploymentKey);
+    }
     return obj;
   },
 
@@ -1370,6 +1849,7 @@ export const CreateBurnTransactionRequest: MessageFns<CreateBurnTransactionReque
       : Long.UZERO;
     message.claimPublicKey = object.claimPublicKey ?? new Uint8Array(0);
     message.paymentId = object.paymentId ?? new Uint8Array(0);
+    message.sidechainDeploymentKey = object.sidechainDeploymentKey ?? new Uint8Array(0);
     return message;
   },
 };
@@ -3355,7 +3835,7 @@ export const GetBalanceResponse: MessageFns<GetBalanceResponse> = {
 };
 
 function createBaseGetStateResponse(): GetStateResponse {
-  return { scannedHeight: Long.UZERO, balance: undefined, network: undefined };
+  return { scannedHeight: Long.UZERO, balance: undefined, network: undefined, hasDoneInitialValidation: false };
 }
 
 export const GetStateResponse: MessageFns<GetStateResponse> = {
@@ -3368,6 +3848,9 @@ export const GetStateResponse: MessageFns<GetStateResponse> = {
     }
     if (message.network !== undefined) {
       NetworkStatusResponse.encode(message.network, writer.uint32(26).fork()).join();
+    }
+    if (message.hasDoneInitialValidation !== false) {
+      writer.uint32(32).bool(message.hasDoneInitialValidation);
     }
     return writer;
   },
@@ -3403,6 +3886,14 @@ export const GetStateResponse: MessageFns<GetStateResponse> = {
           message.network = NetworkStatusResponse.decode(reader, reader.uint32());
           continue;
         }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.hasDoneInitialValidation = reader.bool();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -3417,6 +3908,9 @@ export const GetStateResponse: MessageFns<GetStateResponse> = {
       scannedHeight: isSet(object.scannedHeight) ? Long.fromValue(object.scannedHeight) : Long.UZERO,
       balance: isSet(object.balance) ? GetBalanceResponse.fromJSON(object.balance) : undefined,
       network: isSet(object.network) ? NetworkStatusResponse.fromJSON(object.network) : undefined,
+      hasDoneInitialValidation: isSet(object.hasDoneInitialValidation)
+        ? globalThis.Boolean(object.hasDoneInitialValidation)
+        : false,
     };
   },
 
@@ -3430,6 +3924,9 @@ export const GetStateResponse: MessageFns<GetStateResponse> = {
     }
     if (message.network !== undefined) {
       obj.network = NetworkStatusResponse.toJSON(message.network);
+    }
+    if (message.hasDoneInitialValidation !== false) {
+      obj.hasDoneInitialValidation = message.hasDoneInitialValidation;
     }
     return obj;
   },
@@ -3448,6 +3945,7 @@ export const GetStateResponse: MessageFns<GetStateResponse> = {
     message.network = (object.network !== undefined && object.network !== null)
       ? NetworkStatusResponse.fromPartial(object.network)
       : undefined;
+    message.hasDoneInitialValidation = object.hasDoneInitialValidation ?? false;
     return message;
   },
 };
@@ -3867,16 +4365,43 @@ export const ImportUtxosResponse: MessageFns<ImportUtxosResponse> = {
 };
 
 function createBaseCreateTemplateRegistrationRequest(): CreateTemplateRegistrationRequest {
-  return { templateRegistration: undefined, feePerGram: Long.UZERO };
+  return {
+    feePerGram: Long.UZERO,
+    templateName: "",
+    templateVersion: 0,
+    templateType: undefined,
+    buildInfo: undefined,
+    binarySha: new Uint8Array(0),
+    binaryUrl: "",
+    sidechainDeploymentKey: new Uint8Array(0),
+  };
 }
 
 export const CreateTemplateRegistrationRequest: MessageFns<CreateTemplateRegistrationRequest> = {
   encode(message: CreateTemplateRegistrationRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.templateRegistration !== undefined) {
-      TemplateRegistration.encode(message.templateRegistration, writer.uint32(10).fork()).join();
-    }
     if (!message.feePerGram.equals(Long.UZERO)) {
-      writer.uint32(16).uint64(message.feePerGram.toString());
+      writer.uint32(8).uint64(message.feePerGram.toString());
+    }
+    if (message.templateName !== "") {
+      writer.uint32(18).string(message.templateName);
+    }
+    if (message.templateVersion !== 0) {
+      writer.uint32(24).uint32(message.templateVersion);
+    }
+    if (message.templateType !== undefined) {
+      TemplateType.encode(message.templateType, writer.uint32(34).fork()).join();
+    }
+    if (message.buildInfo !== undefined) {
+      BuildInfo.encode(message.buildInfo, writer.uint32(42).fork()).join();
+    }
+    if (message.binarySha.length !== 0) {
+      writer.uint32(50).bytes(message.binarySha);
+    }
+    if (message.binaryUrl !== "") {
+      writer.uint32(58).string(message.binaryUrl);
+    }
+    if (message.sidechainDeploymentKey.length !== 0) {
+      writer.uint32(66).bytes(message.sidechainDeploymentKey);
     }
     return writer;
   },
@@ -3889,19 +4414,67 @@ export const CreateTemplateRegistrationRequest: MessageFns<CreateTemplateRegistr
       const tag = reader.uint32();
       switch (tag >>> 3) {
         case 1: {
-          if (tag !== 10) {
-            break;
-          }
-
-          message.templateRegistration = TemplateRegistration.decode(reader, reader.uint32());
-          continue;
-        }
-        case 2: {
-          if (tag !== 16) {
+          if (tag !== 8) {
             break;
           }
 
           message.feePerGram = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.templateName = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.templateVersion = reader.uint32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.templateType = TemplateType.decode(reader, reader.uint32());
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.buildInfo = BuildInfo.decode(reader, reader.uint32());
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.binarySha = reader.bytes();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.binaryUrl = reader.string();
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.sidechainDeploymentKey = reader.bytes();
           continue;
         }
       }
@@ -3915,20 +4488,44 @@ export const CreateTemplateRegistrationRequest: MessageFns<CreateTemplateRegistr
 
   fromJSON(object: any): CreateTemplateRegistrationRequest {
     return {
-      templateRegistration: isSet(object.templateRegistration)
-        ? TemplateRegistration.fromJSON(object.templateRegistration)
-        : undefined,
       feePerGram: isSet(object.feePerGram) ? Long.fromValue(object.feePerGram) : Long.UZERO,
+      templateName: isSet(object.templateName) ? globalThis.String(object.templateName) : "",
+      templateVersion: isSet(object.templateVersion) ? globalThis.Number(object.templateVersion) : 0,
+      templateType: isSet(object.templateType) ? TemplateType.fromJSON(object.templateType) : undefined,
+      buildInfo: isSet(object.buildInfo) ? BuildInfo.fromJSON(object.buildInfo) : undefined,
+      binarySha: isSet(object.binarySha) ? bytesFromBase64(object.binarySha) : new Uint8Array(0),
+      binaryUrl: isSet(object.binaryUrl) ? globalThis.String(object.binaryUrl) : "",
+      sidechainDeploymentKey: isSet(object.sidechainDeploymentKey)
+        ? bytesFromBase64(object.sidechainDeploymentKey)
+        : new Uint8Array(0),
     };
   },
 
   toJSON(message: CreateTemplateRegistrationRequest): unknown {
     const obj: any = {};
-    if (message.templateRegistration !== undefined) {
-      obj.templateRegistration = TemplateRegistration.toJSON(message.templateRegistration);
-    }
     if (!message.feePerGram.equals(Long.UZERO)) {
       obj.feePerGram = (message.feePerGram || Long.UZERO).toString();
+    }
+    if (message.templateName !== "") {
+      obj.templateName = message.templateName;
+    }
+    if (message.templateVersion !== 0) {
+      obj.templateVersion = Math.round(message.templateVersion);
+    }
+    if (message.templateType !== undefined) {
+      obj.templateType = TemplateType.toJSON(message.templateType);
+    }
+    if (message.buildInfo !== undefined) {
+      obj.buildInfo = BuildInfo.toJSON(message.buildInfo);
+    }
+    if (message.binarySha.length !== 0) {
+      obj.binarySha = base64FromBytes(message.binarySha);
+    }
+    if (message.binaryUrl !== "") {
+      obj.binaryUrl = message.binaryUrl;
+    }
+    if (message.sidechainDeploymentKey.length !== 0) {
+      obj.sidechainDeploymentKey = base64FromBytes(message.sidechainDeploymentKey);
     }
     return obj;
   },
@@ -3942,12 +4539,20 @@ export const CreateTemplateRegistrationRequest: MessageFns<CreateTemplateRegistr
     object: I,
   ): CreateTemplateRegistrationRequest {
     const message = createBaseCreateTemplateRegistrationRequest();
-    message.templateRegistration = (object.templateRegistration !== undefined && object.templateRegistration !== null)
-      ? TemplateRegistration.fromPartial(object.templateRegistration)
-      : undefined;
     message.feePerGram = (object.feePerGram !== undefined && object.feePerGram !== null)
       ? Long.fromValue(object.feePerGram)
       : Long.UZERO;
+    message.templateName = object.templateName ?? "";
+    message.templateVersion = object.templateVersion ?? 0;
+    message.templateType = (object.templateType !== undefined && object.templateType !== null)
+      ? TemplateType.fromPartial(object.templateType)
+      : undefined;
+    message.buildInfo = (object.buildInfo !== undefined && object.buildInfo !== null)
+      ? BuildInfo.fromPartial(object.buildInfo)
+      : undefined;
+    message.binarySha = object.binarySha ?? new Uint8Array(0);
+    message.binaryUrl = object.binaryUrl ?? "";
+    message.sidechainDeploymentKey = object.sidechainDeploymentKey ?? new Uint8Array(0);
     return message;
   },
 };
@@ -4338,82 +4943,6 @@ export const ValidateResponse: MessageFns<ValidateResponse> = {
   },
 };
 
-function createBaseSetBaseNodeRequest(): SetBaseNodeRequest {
-  return { publicKeyHex: "", netAddress: "" };
-}
-
-export const SetBaseNodeRequest: MessageFns<SetBaseNodeRequest> = {
-  encode(message: SetBaseNodeRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.publicKeyHex !== "") {
-      writer.uint32(10).string(message.publicKeyHex);
-    }
-    if (message.netAddress !== "") {
-      writer.uint32(18).string(message.netAddress);
-    }
-    return writer;
-  },
-
-  decode(input: BinaryReader | Uint8Array, length?: number): SetBaseNodeRequest {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseSetBaseNodeRequest();
-    while (reader.pos < end) {
-      const tag = reader.uint32();
-      switch (tag >>> 3) {
-        case 1: {
-          if (tag !== 10) {
-            break;
-          }
-
-          message.publicKeyHex = reader.string();
-          continue;
-        }
-        case 2: {
-          if (tag !== 18) {
-            break;
-          }
-
-          message.netAddress = reader.string();
-          continue;
-        }
-      }
-      if ((tag & 7) === 4 || tag === 0) {
-        break;
-      }
-      reader.skip(tag & 7);
-    }
-    return message;
-  },
-
-  fromJSON(object: any): SetBaseNodeRequest {
-    return {
-      publicKeyHex: isSet(object.publicKeyHex) ? globalThis.String(object.publicKeyHex) : "",
-      netAddress: isSet(object.netAddress) ? globalThis.String(object.netAddress) : "",
-    };
-  },
-
-  toJSON(message: SetBaseNodeRequest): unknown {
-    const obj: any = {};
-    if (message.publicKeyHex !== "") {
-      obj.publicKeyHex = message.publicKeyHex;
-    }
-    if (message.netAddress !== "") {
-      obj.netAddress = message.netAddress;
-    }
-    return obj;
-  },
-
-  create<I extends Exact<DeepPartial<SetBaseNodeRequest>, I>>(base?: I): SetBaseNodeRequest {
-    return SetBaseNodeRequest.fromPartial(base ?? ({} as any));
-  },
-  fromPartial<I extends Exact<DeepPartial<SetBaseNodeRequest>, I>>(object: I): SetBaseNodeRequest {
-    const message = createBaseSetBaseNodeRequest();
-    message.publicKeyHex = object.publicKeyHex ?? "";
-    message.netAddress = object.netAddress ?? "";
-    return message;
-  },
-};
-
 function createBaseSetBaseNodeResponse(): SetBaseNodeResponse {
   return {};
 }
@@ -4610,7 +5139,8 @@ function createBaseTransactionEvent(): TransactionEvent {
     status: "",
     direction: "",
     amount: Long.UZERO,
-    paymentId: new Uint8Array(0),
+    rawPaymentId: new Uint8Array(0),
+    userPaymentId: new Uint8Array(0),
   };
 }
 
@@ -4637,8 +5167,11 @@ export const TransactionEvent: MessageFns<TransactionEvent> = {
     if (!message.amount.equals(Long.UZERO)) {
       writer.uint32(56).uint64(message.amount.toString());
     }
-    if (message.paymentId.length !== 0) {
-      writer.uint32(74).bytes(message.paymentId);
+    if (message.rawPaymentId.length !== 0) {
+      writer.uint32(74).bytes(message.rawPaymentId);
+    }
+    if (message.userPaymentId.length !== 0) {
+      writer.uint32(82).bytes(message.userPaymentId);
     }
     return writer;
   },
@@ -4711,7 +5244,15 @@ export const TransactionEvent: MessageFns<TransactionEvent> = {
             break;
           }
 
-          message.paymentId = reader.bytes();
+          message.rawPaymentId = reader.bytes();
+          continue;
+        }
+        case 10: {
+          if (tag !== 82) {
+            break;
+          }
+
+          message.userPaymentId = reader.bytes();
           continue;
         }
       }
@@ -4732,7 +5273,8 @@ export const TransactionEvent: MessageFns<TransactionEvent> = {
       status: isSet(object.status) ? globalThis.String(object.status) : "",
       direction: isSet(object.direction) ? globalThis.String(object.direction) : "",
       amount: isSet(object.amount) ? Long.fromValue(object.amount) : Long.UZERO,
-      paymentId: isSet(object.paymentId) ? bytesFromBase64(object.paymentId) : new Uint8Array(0),
+      rawPaymentId: isSet(object.rawPaymentId) ? bytesFromBase64(object.rawPaymentId) : new Uint8Array(0),
+      userPaymentId: isSet(object.userPaymentId) ? bytesFromBase64(object.userPaymentId) : new Uint8Array(0),
     };
   },
 
@@ -4759,8 +5301,11 @@ export const TransactionEvent: MessageFns<TransactionEvent> = {
     if (!message.amount.equals(Long.UZERO)) {
       obj.amount = (message.amount || Long.UZERO).toString();
     }
-    if (message.paymentId.length !== 0) {
-      obj.paymentId = base64FromBytes(message.paymentId);
+    if (message.rawPaymentId.length !== 0) {
+      obj.rawPaymentId = base64FromBytes(message.rawPaymentId);
+    }
+    if (message.userPaymentId.length !== 0) {
+      obj.userPaymentId = base64FromBytes(message.userPaymentId);
     }
     return obj;
   },
@@ -4779,7 +5324,8 @@ export const TransactionEvent: MessageFns<TransactionEvent> = {
     message.amount = (object.amount !== undefined && object.amount !== null)
       ? Long.fromValue(object.amount)
       : Long.UZERO;
-    message.paymentId = object.paymentId ?? new Uint8Array(0);
+    message.rawPaymentId = object.rawPaymentId ?? new Uint8Array(0);
+    message.userPaymentId = object.userPaymentId ?? new Uint8Array(0);
     return message;
   },
 };
@@ -4848,8 +5394,11 @@ function createBaseRegisterValidatorNodeRequest(): RegisterValidatorNodeRequest 
   return {
     validatorNodePublicKey: new Uint8Array(0),
     validatorNodeSignature: undefined,
+    validatorNodeClaimPublicKey: new Uint8Array(0),
+    maxEpoch: Long.UZERO,
     feePerGram: Long.UZERO,
     paymentId: new Uint8Array(0),
+    sidechainDeploymentKey: new Uint8Array(0),
   };
 }
 
@@ -4861,11 +5410,20 @@ export const RegisterValidatorNodeRequest: MessageFns<RegisterValidatorNodeReque
     if (message.validatorNodeSignature !== undefined) {
       Signature.encode(message.validatorNodeSignature, writer.uint32(18).fork()).join();
     }
+    if (message.validatorNodeClaimPublicKey.length !== 0) {
+      writer.uint32(26).bytes(message.validatorNodeClaimPublicKey);
+    }
+    if (!message.maxEpoch.equals(Long.UZERO)) {
+      writer.uint32(32).uint64(message.maxEpoch.toString());
+    }
     if (!message.feePerGram.equals(Long.UZERO)) {
-      writer.uint32(24).uint64(message.feePerGram.toString());
+      writer.uint32(40).uint64(message.feePerGram.toString());
     }
     if (message.paymentId.length !== 0) {
-      writer.uint32(42).bytes(message.paymentId);
+      writer.uint32(50).bytes(message.paymentId);
+    }
+    if (message.sidechainDeploymentKey.length !== 0) {
+      writer.uint32(58).bytes(message.sidechainDeploymentKey);
     }
     return writer;
   },
@@ -4894,19 +5452,43 @@ export const RegisterValidatorNodeRequest: MessageFns<RegisterValidatorNodeReque
           continue;
         }
         case 3: {
-          if (tag !== 24) {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.validatorNodeClaimPublicKey = reader.bytes();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.maxEpoch = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
             break;
           }
 
           message.feePerGram = Long.fromString(reader.uint64().toString(), true);
           continue;
         }
-        case 5: {
-          if (tag !== 42) {
+        case 6: {
+          if (tag !== 50) {
             break;
           }
 
           message.paymentId = reader.bytes();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.sidechainDeploymentKey = reader.bytes();
           continue;
         }
       }
@@ -4926,8 +5508,15 @@ export const RegisterValidatorNodeRequest: MessageFns<RegisterValidatorNodeReque
       validatorNodeSignature: isSet(object.validatorNodeSignature)
         ? Signature.fromJSON(object.validatorNodeSignature)
         : undefined,
+      validatorNodeClaimPublicKey: isSet(object.validatorNodeClaimPublicKey)
+        ? bytesFromBase64(object.validatorNodeClaimPublicKey)
+        : new Uint8Array(0),
+      maxEpoch: isSet(object.maxEpoch) ? Long.fromValue(object.maxEpoch) : Long.UZERO,
       feePerGram: isSet(object.feePerGram) ? Long.fromValue(object.feePerGram) : Long.UZERO,
       paymentId: isSet(object.paymentId) ? bytesFromBase64(object.paymentId) : new Uint8Array(0),
+      sidechainDeploymentKey: isSet(object.sidechainDeploymentKey)
+        ? bytesFromBase64(object.sidechainDeploymentKey)
+        : new Uint8Array(0),
     };
   },
 
@@ -4939,11 +5528,20 @@ export const RegisterValidatorNodeRequest: MessageFns<RegisterValidatorNodeReque
     if (message.validatorNodeSignature !== undefined) {
       obj.validatorNodeSignature = Signature.toJSON(message.validatorNodeSignature);
     }
+    if (message.validatorNodeClaimPublicKey.length !== 0) {
+      obj.validatorNodeClaimPublicKey = base64FromBytes(message.validatorNodeClaimPublicKey);
+    }
+    if (!message.maxEpoch.equals(Long.UZERO)) {
+      obj.maxEpoch = (message.maxEpoch || Long.UZERO).toString();
+    }
     if (!message.feePerGram.equals(Long.UZERO)) {
       obj.feePerGram = (message.feePerGram || Long.UZERO).toString();
     }
     if (message.paymentId.length !== 0) {
       obj.paymentId = base64FromBytes(message.paymentId);
+    }
+    if (message.sidechainDeploymentKey.length !== 0) {
+      obj.sidechainDeploymentKey = base64FromBytes(message.sidechainDeploymentKey);
     }
     return obj;
   },
@@ -4958,10 +5556,15 @@ export const RegisterValidatorNodeRequest: MessageFns<RegisterValidatorNodeReque
       (object.validatorNodeSignature !== undefined && object.validatorNodeSignature !== null)
         ? Signature.fromPartial(object.validatorNodeSignature)
         : undefined;
+    message.validatorNodeClaimPublicKey = object.validatorNodeClaimPublicKey ?? new Uint8Array(0);
+    message.maxEpoch = (object.maxEpoch !== undefined && object.maxEpoch !== null)
+      ? Long.fromValue(object.maxEpoch)
+      : Long.UZERO;
     message.feePerGram = (object.feePerGram !== undefined && object.feePerGram !== null)
       ? Long.fromValue(object.feePerGram)
       : Long.UZERO;
     message.paymentId = object.paymentId ?? new Uint8Array(0);
+    message.sidechainDeploymentKey = object.sidechainDeploymentKey ?? new Uint8Array(0);
     return message;
   },
 };
@@ -5053,6 +5656,444 @@ export const RegisterValidatorNodeResponse: MessageFns<RegisterValidatorNodeResp
     object: I,
   ): RegisterValidatorNodeResponse {
     const message = createBaseRegisterValidatorNodeResponse();
+    message.transactionId = (object.transactionId !== undefined && object.transactionId !== null)
+      ? Long.fromValue(object.transactionId)
+      : Long.UZERO;
+    message.isSuccess = object.isSuccess ?? false;
+    message.failureMessage = object.failureMessage ?? "";
+    return message;
+  },
+};
+
+function createBaseSubmitValidatorEvictionProofRequest(): SubmitValidatorEvictionProofRequest {
+  return { proof: undefined, feePerGram: Long.UZERO, message: "", sidechainDeploymentKey: new Uint8Array(0) };
+}
+
+export const SubmitValidatorEvictionProofRequest: MessageFns<SubmitValidatorEvictionProofRequest> = {
+  encode(message: SubmitValidatorEvictionProofRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.proof !== undefined) {
+      EvictionProof.encode(message.proof, writer.uint32(10).fork()).join();
+    }
+    if (!message.feePerGram.equals(Long.UZERO)) {
+      writer.uint32(16).uint64(message.feePerGram.toString());
+    }
+    if (message.message !== "") {
+      writer.uint32(26).string(message.message);
+    }
+    if (message.sidechainDeploymentKey.length !== 0) {
+      writer.uint32(34).bytes(message.sidechainDeploymentKey);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SubmitValidatorEvictionProofRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSubmitValidatorEvictionProofRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.proof = EvictionProof.decode(reader, reader.uint32());
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.feePerGram = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.sidechainDeploymentKey = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SubmitValidatorEvictionProofRequest {
+    return {
+      proof: isSet(object.proof) ? EvictionProof.fromJSON(object.proof) : undefined,
+      feePerGram: isSet(object.feePerGram) ? Long.fromValue(object.feePerGram) : Long.UZERO,
+      message: isSet(object.message) ? globalThis.String(object.message) : "",
+      sidechainDeploymentKey: isSet(object.sidechainDeploymentKey)
+        ? bytesFromBase64(object.sidechainDeploymentKey)
+        : new Uint8Array(0),
+    };
+  },
+
+  toJSON(message: SubmitValidatorEvictionProofRequest): unknown {
+    const obj: any = {};
+    if (message.proof !== undefined) {
+      obj.proof = EvictionProof.toJSON(message.proof);
+    }
+    if (!message.feePerGram.equals(Long.UZERO)) {
+      obj.feePerGram = (message.feePerGram || Long.UZERO).toString();
+    }
+    if (message.message !== "") {
+      obj.message = message.message;
+    }
+    if (message.sidechainDeploymentKey.length !== 0) {
+      obj.sidechainDeploymentKey = base64FromBytes(message.sidechainDeploymentKey);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<SubmitValidatorEvictionProofRequest>, I>>(
+    base?: I,
+  ): SubmitValidatorEvictionProofRequest {
+    return SubmitValidatorEvictionProofRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SubmitValidatorEvictionProofRequest>, I>>(
+    object: I,
+  ): SubmitValidatorEvictionProofRequest {
+    const message = createBaseSubmitValidatorEvictionProofRequest();
+    message.proof = (object.proof !== undefined && object.proof !== null)
+      ? EvictionProof.fromPartial(object.proof)
+      : undefined;
+    message.feePerGram = (object.feePerGram !== undefined && object.feePerGram !== null)
+      ? Long.fromValue(object.feePerGram)
+      : Long.UZERO;
+    message.message = object.message ?? "";
+    message.sidechainDeploymentKey = object.sidechainDeploymentKey ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseSubmitValidatorEvictionProofResponse(): SubmitValidatorEvictionProofResponse {
+  return { txId: Long.UZERO };
+}
+
+export const SubmitValidatorEvictionProofResponse: MessageFns<SubmitValidatorEvictionProofResponse> = {
+  encode(message: SubmitValidatorEvictionProofResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (!message.txId.equals(Long.UZERO)) {
+      writer.uint32(8).uint64(message.txId.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SubmitValidatorEvictionProofResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSubmitValidatorEvictionProofResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.txId = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SubmitValidatorEvictionProofResponse {
+    return { txId: isSet(object.txId) ? Long.fromValue(object.txId) : Long.UZERO };
+  },
+
+  toJSON(message: SubmitValidatorEvictionProofResponse): unknown {
+    const obj: any = {};
+    if (!message.txId.equals(Long.UZERO)) {
+      obj.txId = (message.txId || Long.UZERO).toString();
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<SubmitValidatorEvictionProofResponse>, I>>(
+    base?: I,
+  ): SubmitValidatorEvictionProofResponse {
+    return SubmitValidatorEvictionProofResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SubmitValidatorEvictionProofResponse>, I>>(
+    object: I,
+  ): SubmitValidatorEvictionProofResponse {
+    const message = createBaseSubmitValidatorEvictionProofResponse();
+    message.txId = (object.txId !== undefined && object.txId !== null) ? Long.fromValue(object.txId) : Long.UZERO;
+    return message;
+  },
+};
+
+function createBaseSubmitValidatorNodeExitRequest(): SubmitValidatorNodeExitRequest {
+  return {
+    validatorNodePublicKey: new Uint8Array(0),
+    validatorNodeSignature: undefined,
+    maxEpoch: Long.UZERO,
+    feePerGram: Long.UZERO,
+    message: new Uint8Array(0),
+    sidechainDeploymentKey: new Uint8Array(0),
+  };
+}
+
+export const SubmitValidatorNodeExitRequest: MessageFns<SubmitValidatorNodeExitRequest> = {
+  encode(message: SubmitValidatorNodeExitRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.validatorNodePublicKey.length !== 0) {
+      writer.uint32(10).bytes(message.validatorNodePublicKey);
+    }
+    if (message.validatorNodeSignature !== undefined) {
+      Signature.encode(message.validatorNodeSignature, writer.uint32(18).fork()).join();
+    }
+    if (!message.maxEpoch.equals(Long.UZERO)) {
+      writer.uint32(24).uint64(message.maxEpoch.toString());
+    }
+    if (!message.feePerGram.equals(Long.UZERO)) {
+      writer.uint32(32).uint64(message.feePerGram.toString());
+    }
+    if (message.message.length !== 0) {
+      writer.uint32(42).bytes(message.message);
+    }
+    if (message.sidechainDeploymentKey.length !== 0) {
+      writer.uint32(50).bytes(message.sidechainDeploymentKey);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SubmitValidatorNodeExitRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSubmitValidatorNodeExitRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.validatorNodePublicKey = reader.bytes();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.validatorNodeSignature = Signature.decode(reader, reader.uint32());
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.maxEpoch = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.feePerGram = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.message = reader.bytes();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.sidechainDeploymentKey = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SubmitValidatorNodeExitRequest {
+    return {
+      validatorNodePublicKey: isSet(object.validatorNodePublicKey)
+        ? bytesFromBase64(object.validatorNodePublicKey)
+        : new Uint8Array(0),
+      validatorNodeSignature: isSet(object.validatorNodeSignature)
+        ? Signature.fromJSON(object.validatorNodeSignature)
+        : undefined,
+      maxEpoch: isSet(object.maxEpoch) ? Long.fromValue(object.maxEpoch) : Long.UZERO,
+      feePerGram: isSet(object.feePerGram) ? Long.fromValue(object.feePerGram) : Long.UZERO,
+      message: isSet(object.message) ? bytesFromBase64(object.message) : new Uint8Array(0),
+      sidechainDeploymentKey: isSet(object.sidechainDeploymentKey)
+        ? bytesFromBase64(object.sidechainDeploymentKey)
+        : new Uint8Array(0),
+    };
+  },
+
+  toJSON(message: SubmitValidatorNodeExitRequest): unknown {
+    const obj: any = {};
+    if (message.validatorNodePublicKey.length !== 0) {
+      obj.validatorNodePublicKey = base64FromBytes(message.validatorNodePublicKey);
+    }
+    if (message.validatorNodeSignature !== undefined) {
+      obj.validatorNodeSignature = Signature.toJSON(message.validatorNodeSignature);
+    }
+    if (!message.maxEpoch.equals(Long.UZERO)) {
+      obj.maxEpoch = (message.maxEpoch || Long.UZERO).toString();
+    }
+    if (!message.feePerGram.equals(Long.UZERO)) {
+      obj.feePerGram = (message.feePerGram || Long.UZERO).toString();
+    }
+    if (message.message.length !== 0) {
+      obj.message = base64FromBytes(message.message);
+    }
+    if (message.sidechainDeploymentKey.length !== 0) {
+      obj.sidechainDeploymentKey = base64FromBytes(message.sidechainDeploymentKey);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<SubmitValidatorNodeExitRequest>, I>>(base?: I): SubmitValidatorNodeExitRequest {
+    return SubmitValidatorNodeExitRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SubmitValidatorNodeExitRequest>, I>>(
+    object: I,
+  ): SubmitValidatorNodeExitRequest {
+    const message = createBaseSubmitValidatorNodeExitRequest();
+    message.validatorNodePublicKey = object.validatorNodePublicKey ?? new Uint8Array(0);
+    message.validatorNodeSignature =
+      (object.validatorNodeSignature !== undefined && object.validatorNodeSignature !== null)
+        ? Signature.fromPartial(object.validatorNodeSignature)
+        : undefined;
+    message.maxEpoch = (object.maxEpoch !== undefined && object.maxEpoch !== null)
+      ? Long.fromValue(object.maxEpoch)
+      : Long.UZERO;
+    message.feePerGram = (object.feePerGram !== undefined && object.feePerGram !== null)
+      ? Long.fromValue(object.feePerGram)
+      : Long.UZERO;
+    message.message = object.message ?? new Uint8Array(0);
+    message.sidechainDeploymentKey = object.sidechainDeploymentKey ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseSubmitValidatorNodeExitResponse(): SubmitValidatorNodeExitResponse {
+  return { transactionId: Long.UZERO, isSuccess: false, failureMessage: "" };
+}
+
+export const SubmitValidatorNodeExitResponse: MessageFns<SubmitValidatorNodeExitResponse> = {
+  encode(message: SubmitValidatorNodeExitResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (!message.transactionId.equals(Long.UZERO)) {
+      writer.uint32(8).uint64(message.transactionId.toString());
+    }
+    if (message.isSuccess !== false) {
+      writer.uint32(16).bool(message.isSuccess);
+    }
+    if (message.failureMessage !== "") {
+      writer.uint32(26).string(message.failureMessage);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SubmitValidatorNodeExitResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSubmitValidatorNodeExitResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.transactionId = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.isSuccess = reader.bool();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.failureMessage = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SubmitValidatorNodeExitResponse {
+    return {
+      transactionId: isSet(object.transactionId) ? Long.fromValue(object.transactionId) : Long.UZERO,
+      isSuccess: isSet(object.isSuccess) ? globalThis.Boolean(object.isSuccess) : false,
+      failureMessage: isSet(object.failureMessage) ? globalThis.String(object.failureMessage) : "",
+    };
+  },
+
+  toJSON(message: SubmitValidatorNodeExitResponse): unknown {
+    const obj: any = {};
+    if (!message.transactionId.equals(Long.UZERO)) {
+      obj.transactionId = (message.transactionId || Long.UZERO).toString();
+    }
+    if (message.isSuccess !== false) {
+      obj.isSuccess = message.isSuccess;
+    }
+    if (message.failureMessage !== "") {
+      obj.failureMessage = message.failureMessage;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<SubmitValidatorNodeExitResponse>, I>>(base?: I): SubmitValidatorNodeExitResponse {
+    return SubmitValidatorNodeExitResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SubmitValidatorNodeExitResponse>, I>>(
+    object: I,
+  ): SubmitValidatorNodeExitResponse {
+    const message = createBaseSubmitValidatorNodeExitResponse();
     message.transactionId = (object.transactionId !== undefined && object.transactionId !== null)
       ? Long.fromValue(object.transactionId)
       : Long.UZERO;
@@ -5834,6 +6875,874 @@ export const GetPaymentByReferenceResponse: MessageFns<GetPaymentByReferenceResp
   },
 };
 
+function createBaseGetFeeEstimateRequest(): GetFeeEstimateRequest {
+  return { amount: Long.UZERO, feePerGram: Long.UZERO, outputCount: Long.UZERO };
+}
+
+export const GetFeeEstimateRequest: MessageFns<GetFeeEstimateRequest> = {
+  encode(message: GetFeeEstimateRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (!message.amount.equals(Long.UZERO)) {
+      writer.uint32(8).uint64(message.amount.toString());
+    }
+    if (!message.feePerGram.equals(Long.UZERO)) {
+      writer.uint32(16).uint64(message.feePerGram.toString());
+    }
+    if (!message.outputCount.equals(Long.UZERO)) {
+      writer.uint32(24).uint64(message.outputCount.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetFeeEstimateRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetFeeEstimateRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.amount = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.feePerGram = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.outputCount = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GetFeeEstimateRequest {
+    return {
+      amount: isSet(object.amount) ? Long.fromValue(object.amount) : Long.UZERO,
+      feePerGram: isSet(object.feePerGram) ? Long.fromValue(object.feePerGram) : Long.UZERO,
+      outputCount: isSet(object.outputCount) ? Long.fromValue(object.outputCount) : Long.UZERO,
+    };
+  },
+
+  toJSON(message: GetFeeEstimateRequest): unknown {
+    const obj: any = {};
+    if (!message.amount.equals(Long.UZERO)) {
+      obj.amount = (message.amount || Long.UZERO).toString();
+    }
+    if (!message.feePerGram.equals(Long.UZERO)) {
+      obj.feePerGram = (message.feePerGram || Long.UZERO).toString();
+    }
+    if (!message.outputCount.equals(Long.UZERO)) {
+      obj.outputCount = (message.outputCount || Long.UZERO).toString();
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<GetFeeEstimateRequest>, I>>(base?: I): GetFeeEstimateRequest {
+    return GetFeeEstimateRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GetFeeEstimateRequest>, I>>(object: I): GetFeeEstimateRequest {
+    const message = createBaseGetFeeEstimateRequest();
+    message.amount = (object.amount !== undefined && object.amount !== null)
+      ? Long.fromValue(object.amount)
+      : Long.UZERO;
+    message.feePerGram = (object.feePerGram !== undefined && object.feePerGram !== null)
+      ? Long.fromValue(object.feePerGram)
+      : Long.UZERO;
+    message.outputCount = (object.outputCount !== undefined && object.outputCount !== null)
+      ? Long.fromValue(object.outputCount)
+      : Long.UZERO;
+    return message;
+  },
+};
+
+function createBaseGetFeeEstimateResponse(): GetFeeEstimateResponse {
+  return { estimatedFee: Long.UZERO };
+}
+
+export const GetFeeEstimateResponse: MessageFns<GetFeeEstimateResponse> = {
+  encode(message: GetFeeEstimateResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (!message.estimatedFee.equals(Long.UZERO)) {
+      writer.uint32(8).uint64(message.estimatedFee.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetFeeEstimateResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetFeeEstimateResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.estimatedFee = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GetFeeEstimateResponse {
+    return { estimatedFee: isSet(object.estimatedFee) ? Long.fromValue(object.estimatedFee) : Long.UZERO };
+  },
+
+  toJSON(message: GetFeeEstimateResponse): unknown {
+    const obj: any = {};
+    if (!message.estimatedFee.equals(Long.UZERO)) {
+      obj.estimatedFee = (message.estimatedFee || Long.UZERO).toString();
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<GetFeeEstimateResponse>, I>>(base?: I): GetFeeEstimateResponse {
+    return GetFeeEstimateResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GetFeeEstimateResponse>, I>>(object: I): GetFeeEstimateResponse {
+    const message = createBaseGetFeeEstimateResponse();
+    message.estimatedFee = (object.estimatedFee !== undefined && object.estimatedFee !== null)
+      ? Long.fromValue(object.estimatedFee)
+      : Long.UZERO;
+    return message;
+  },
+};
+
+function createBaseGetFeePerGramStatsRequest(): GetFeePerGramStatsRequest {
+  return { blockCount: Long.UZERO };
+}
+
+export const GetFeePerGramStatsRequest: MessageFns<GetFeePerGramStatsRequest> = {
+  encode(message: GetFeePerGramStatsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (!message.blockCount.equals(Long.UZERO)) {
+      writer.uint32(8).uint64(message.blockCount.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetFeePerGramStatsRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetFeePerGramStatsRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.blockCount = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GetFeePerGramStatsRequest {
+    return { blockCount: isSet(object.blockCount) ? Long.fromValue(object.blockCount) : Long.UZERO };
+  },
+
+  toJSON(message: GetFeePerGramStatsRequest): unknown {
+    const obj: any = {};
+    if (!message.blockCount.equals(Long.UZERO)) {
+      obj.blockCount = (message.blockCount || Long.UZERO).toString();
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<GetFeePerGramStatsRequest>, I>>(base?: I): GetFeePerGramStatsRequest {
+    return GetFeePerGramStatsRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GetFeePerGramStatsRequest>, I>>(object: I): GetFeePerGramStatsRequest {
+    const message = createBaseGetFeePerGramStatsRequest();
+    message.blockCount = (object.blockCount !== undefined && object.blockCount !== null)
+      ? Long.fromValue(object.blockCount)
+      : Long.UZERO;
+    return message;
+  },
+};
+
+function createBaseGetFeePerGramStatsResponse(): GetFeePerGramStatsResponse {
+  return { feePerGramStats: [] };
+}
+
+export const GetFeePerGramStatsResponse: MessageFns<GetFeePerGramStatsResponse> = {
+  encode(message: GetFeePerGramStatsResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.feePerGramStats) {
+      FeePerGramStat.encode(v!, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetFeePerGramStatsResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetFeePerGramStatsResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.feePerGramStats.push(FeePerGramStat.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GetFeePerGramStatsResponse {
+    return {
+      feePerGramStats: globalThis.Array.isArray(object?.feePerGramStats)
+        ? object.feePerGramStats.map((e: any) => FeePerGramStat.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: GetFeePerGramStatsResponse): unknown {
+    const obj: any = {};
+    if (message.feePerGramStats?.length) {
+      obj.feePerGramStats = message.feePerGramStats.map((e) => FeePerGramStat.toJSON(e));
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<GetFeePerGramStatsResponse>, I>>(base?: I): GetFeePerGramStatsResponse {
+    return GetFeePerGramStatsResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GetFeePerGramStatsResponse>, I>>(object: I): GetFeePerGramStatsResponse {
+    const message = createBaseGetFeePerGramStatsResponse();
+    message.feePerGramStats = object.feePerGramStats?.map((e) => FeePerGramStat.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseReplaceByFeeRequest(): ReplaceByFeeRequest {
+  return { transactionId: Long.UZERO, feeIncrease: Long.UZERO };
+}
+
+export const ReplaceByFeeRequest: MessageFns<ReplaceByFeeRequest> = {
+  encode(message: ReplaceByFeeRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (!message.transactionId.equals(Long.UZERO)) {
+      writer.uint32(8).uint64(message.transactionId.toString());
+    }
+    if (!message.feeIncrease.equals(Long.UZERO)) {
+      writer.uint32(16).uint64(message.feeIncrease.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ReplaceByFeeRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseReplaceByFeeRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.transactionId = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.feeIncrease = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ReplaceByFeeRequest {
+    return {
+      transactionId: isSet(object.transactionId) ? Long.fromValue(object.transactionId) : Long.UZERO,
+      feeIncrease: isSet(object.feeIncrease) ? Long.fromValue(object.feeIncrease) : Long.UZERO,
+    };
+  },
+
+  toJSON(message: ReplaceByFeeRequest): unknown {
+    const obj: any = {};
+    if (!message.transactionId.equals(Long.UZERO)) {
+      obj.transactionId = (message.transactionId || Long.UZERO).toString();
+    }
+    if (!message.feeIncrease.equals(Long.UZERO)) {
+      obj.feeIncrease = (message.feeIncrease || Long.UZERO).toString();
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ReplaceByFeeRequest>, I>>(base?: I): ReplaceByFeeRequest {
+    return ReplaceByFeeRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ReplaceByFeeRequest>, I>>(object: I): ReplaceByFeeRequest {
+    const message = createBaseReplaceByFeeRequest();
+    message.transactionId = (object.transactionId !== undefined && object.transactionId !== null)
+      ? Long.fromValue(object.transactionId)
+      : Long.UZERO;
+    message.feeIncrease = (object.feeIncrease !== undefined && object.feeIncrease !== null)
+      ? Long.fromValue(object.feeIncrease)
+      : Long.UZERO;
+    return message;
+  },
+};
+
+function createBaseReplaceByFeeResponse(): ReplaceByFeeResponse {
+  return { transactionId: Long.UZERO };
+}
+
+export const ReplaceByFeeResponse: MessageFns<ReplaceByFeeResponse> = {
+  encode(message: ReplaceByFeeResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (!message.transactionId.equals(Long.UZERO)) {
+      writer.uint32(8).uint64(message.transactionId.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ReplaceByFeeResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseReplaceByFeeResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.transactionId = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ReplaceByFeeResponse {
+    return { transactionId: isSet(object.transactionId) ? Long.fromValue(object.transactionId) : Long.UZERO };
+  },
+
+  toJSON(message: ReplaceByFeeResponse): unknown {
+    const obj: any = {};
+    if (!message.transactionId.equals(Long.UZERO)) {
+      obj.transactionId = (message.transactionId || Long.UZERO).toString();
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ReplaceByFeeResponse>, I>>(base?: I): ReplaceByFeeResponse {
+    return ReplaceByFeeResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ReplaceByFeeResponse>, I>>(object: I): ReplaceByFeeResponse {
+    const message = createBaseReplaceByFeeResponse();
+    message.transactionId = (object.transactionId !== undefined && object.transactionId !== null)
+      ? Long.fromValue(object.transactionId)
+      : Long.UZERO;
+    return message;
+  },
+};
+
+function createBaseUserPayForFeeRequest(): UserPayForFeeRequest {
+  return { recipients: [] };
+}
+
+export const UserPayForFeeRequest: MessageFns<UserPayForFeeRequest> = {
+  encode(message: UserPayForFeeRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.recipients) {
+      TxOutputsToSpendTransfer.encode(v!, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): UserPayForFeeRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseUserPayForFeeRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.recipients.push(TxOutputsToSpendTransfer.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): UserPayForFeeRequest {
+    return {
+      recipients: globalThis.Array.isArray(object?.recipients)
+        ? object.recipients.map((e: any) => TxOutputsToSpendTransfer.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: UserPayForFeeRequest): unknown {
+    const obj: any = {};
+    if (message.recipients?.length) {
+      obj.recipients = message.recipients.map((e) => TxOutputsToSpendTransfer.toJSON(e));
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<UserPayForFeeRequest>, I>>(base?: I): UserPayForFeeRequest {
+    return UserPayForFeeRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<UserPayForFeeRequest>, I>>(object: I): UserPayForFeeRequest {
+    const message = createBaseUserPayForFeeRequest();
+    message.recipients = object.recipients?.map((e) => TxOutputsToSpendTransfer.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseTxOutputsToSpendTransfer(): TxOutputsToSpendTransfer {
+  return { txId: Long.UZERO, fee: Long.UZERO, destination: "" };
+}
+
+export const TxOutputsToSpendTransfer: MessageFns<TxOutputsToSpendTransfer> = {
+  encode(message: TxOutputsToSpendTransfer, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (!message.txId.equals(Long.UZERO)) {
+      writer.uint32(8).uint64(message.txId.toString());
+    }
+    if (!message.fee.equals(Long.UZERO)) {
+      writer.uint32(16).uint64(message.fee.toString());
+    }
+    if (message.destination !== "") {
+      writer.uint32(26).string(message.destination);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): TxOutputsToSpendTransfer {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseTxOutputsToSpendTransfer();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.txId = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.fee = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.destination = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): TxOutputsToSpendTransfer {
+    return {
+      txId: isSet(object.txId) ? Long.fromValue(object.txId) : Long.UZERO,
+      fee: isSet(object.fee) ? Long.fromValue(object.fee) : Long.UZERO,
+      destination: isSet(object.destination) ? globalThis.String(object.destination) : "",
+    };
+  },
+
+  toJSON(message: TxOutputsToSpendTransfer): unknown {
+    const obj: any = {};
+    if (!message.txId.equals(Long.UZERO)) {
+      obj.txId = (message.txId || Long.UZERO).toString();
+    }
+    if (!message.fee.equals(Long.UZERO)) {
+      obj.fee = (message.fee || Long.UZERO).toString();
+    }
+    if (message.destination !== "") {
+      obj.destination = message.destination;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<TxOutputsToSpendTransfer>, I>>(base?: I): TxOutputsToSpendTransfer {
+    return TxOutputsToSpendTransfer.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<TxOutputsToSpendTransfer>, I>>(object: I): TxOutputsToSpendTransfer {
+    const message = createBaseTxOutputsToSpendTransfer();
+    message.txId = (object.txId !== undefined && object.txId !== null) ? Long.fromValue(object.txId) : Long.UZERO;
+    message.fee = (object.fee !== undefined && object.fee !== null) ? Long.fromValue(object.fee) : Long.UZERO;
+    message.destination = object.destination ?? "";
+    return message;
+  },
+};
+
+function createBaseUserPayForFeeResponse(): UserPayForFeeResponse {
+  return { results: [] };
+}
+
+export const UserPayForFeeResponse: MessageFns<UserPayForFeeResponse> = {
+  encode(message: UserPayForFeeResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.results) {
+      TransferResult.encode(v!, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): UserPayForFeeResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseUserPayForFeeResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.results.push(TransferResult.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): UserPayForFeeResponse {
+    return {
+      results: globalThis.Array.isArray(object?.results)
+        ? object.results.map((e: any) => TransferResult.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: UserPayForFeeResponse): unknown {
+    const obj: any = {};
+    if (message.results?.length) {
+      obj.results = message.results.map((e) => TransferResult.toJSON(e));
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<UserPayForFeeResponse>, I>>(base?: I): UserPayForFeeResponse {
+    return UserPayForFeeResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<UserPayForFeeResponse>, I>>(object: I): UserPayForFeeResponse {
+    const message = createBaseUserPayForFeeResponse();
+    message.results = object.results?.map((e) => TransferResult.fromPartial(e)) || [];
+    return message;
+  },
+};
+
+function createBaseFeePerGramStat(): FeePerGramStat {
+  return { averageFeePerGram: Long.UZERO, minFeePerGram: Long.UZERO, maxFeePerGram: Long.UZERO };
+}
+
+export const FeePerGramStat: MessageFns<FeePerGramStat> = {
+  encode(message: FeePerGramStat, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (!message.averageFeePerGram.equals(Long.UZERO)) {
+      writer.uint32(8).uint64(message.averageFeePerGram.toString());
+    }
+    if (!message.minFeePerGram.equals(Long.UZERO)) {
+      writer.uint32(16).uint64(message.minFeePerGram.toString());
+    }
+    if (!message.maxFeePerGram.equals(Long.UZERO)) {
+      writer.uint32(24).uint64(message.maxFeePerGram.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): FeePerGramStat {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseFeePerGramStat();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.averageFeePerGram = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.minFeePerGram = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.maxFeePerGram = Long.fromString(reader.uint64().toString(), true);
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): FeePerGramStat {
+    return {
+      averageFeePerGram: isSet(object.averageFeePerGram) ? Long.fromValue(object.averageFeePerGram) : Long.UZERO,
+      minFeePerGram: isSet(object.minFeePerGram) ? Long.fromValue(object.minFeePerGram) : Long.UZERO,
+      maxFeePerGram: isSet(object.maxFeePerGram) ? Long.fromValue(object.maxFeePerGram) : Long.UZERO,
+    };
+  },
+
+  toJSON(message: FeePerGramStat): unknown {
+    const obj: any = {};
+    if (!message.averageFeePerGram.equals(Long.UZERO)) {
+      obj.averageFeePerGram = (message.averageFeePerGram || Long.UZERO).toString();
+    }
+    if (!message.minFeePerGram.equals(Long.UZERO)) {
+      obj.minFeePerGram = (message.minFeePerGram || Long.UZERO).toString();
+    }
+    if (!message.maxFeePerGram.equals(Long.UZERO)) {
+      obj.maxFeePerGram = (message.maxFeePerGram || Long.UZERO).toString();
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<FeePerGramStat>, I>>(base?: I): FeePerGramStat {
+    return FeePerGramStat.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<FeePerGramStat>, I>>(object: I): FeePerGramStat {
+    const message = createBaseFeePerGramStat();
+    message.averageFeePerGram = (object.averageFeePerGram !== undefined && object.averageFeePerGram !== null)
+      ? Long.fromValue(object.averageFeePerGram)
+      : Long.UZERO;
+    message.minFeePerGram = (object.minFeePerGram !== undefined && object.minFeePerGram !== null)
+      ? Long.fromValue(object.minFeePerGram)
+      : Long.UZERO;
+    message.maxFeePerGram = (object.maxFeePerGram !== undefined && object.maxFeePerGram !== null)
+      ? Long.fromValue(object.maxFeePerGram)
+      : Long.UZERO;
+    return message;
+  },
+};
+
+function createBaseSignMessageRequest(): SignMessageRequest {
+  return { message: new Uint8Array(0) };
+}
+
+export const SignMessageRequest: MessageFns<SignMessageRequest> = {
+  encode(message: SignMessageRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.message.length !== 0) {
+      writer.uint32(10).bytes(message.message);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SignMessageRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSignMessageRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.message = reader.bytes();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SignMessageRequest {
+    return { message: isSet(object.message) ? bytesFromBase64(object.message) : new Uint8Array(0) };
+  },
+
+  toJSON(message: SignMessageRequest): unknown {
+    const obj: any = {};
+    if (message.message.length !== 0) {
+      obj.message = base64FromBytes(message.message);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<SignMessageRequest>, I>>(base?: I): SignMessageRequest {
+    return SignMessageRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SignMessageRequest>, I>>(object: I): SignMessageRequest {
+    const message = createBaseSignMessageRequest();
+    message.message = object.message ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseSignMessageResponse(): SignMessageResponse {
+  return { signature: "", publicNonce: "" };
+}
+
+export const SignMessageResponse: MessageFns<SignMessageResponse> = {
+  encode(message: SignMessageResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.signature !== "") {
+      writer.uint32(10).string(message.signature);
+    }
+    if (message.publicNonce !== "") {
+      writer.uint32(18).string(message.publicNonce);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SignMessageResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSignMessageResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.signature = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.publicNonce = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SignMessageResponse {
+    return {
+      signature: isSet(object.signature) ? globalThis.String(object.signature) : "",
+      publicNonce: isSet(object.publicNonce) ? globalThis.String(object.publicNonce) : "",
+    };
+  },
+
+  toJSON(message: SignMessageResponse): unknown {
+    const obj: any = {};
+    if (message.signature !== "") {
+      obj.signature = message.signature;
+    }
+    if (message.publicNonce !== "") {
+      obj.publicNonce = message.publicNonce;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<SignMessageResponse>, I>>(base?: I): SignMessageResponse {
+    return SignMessageResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SignMessageResponse>, I>>(object: I): SignMessageResponse {
+    const message = createBaseSignMessageResponse();
+    message.signature = object.signature ?? "";
+    message.publicNonce = object.publicNonce ?? "";
+    return message;
+  },
+};
+
 /** The gRPC interface for interacting with the wallet. */
 export type WalletService = typeof WalletService;
 export const WalletService = {
@@ -6083,6 +7992,28 @@ export const WalletService = {
     responseSerialize: (value: GetCompleteAddressResponse) =>
       Buffer.from(GetCompleteAddressResponse.encode(value).finish()),
     responseDeserialize: (value: Buffer) => GetCompleteAddressResponse.decode(value),
+  },
+  prepareOneSidedTransactionForSigning: {
+    path: "/tari.rpc.Wallet/PrepareOneSidedTransactionForSigning",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: PrepareOneSidedTransactionForSigningRequest) =>
+      Buffer.from(PrepareOneSidedTransactionForSigningRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer) => PrepareOneSidedTransactionForSigningRequest.decode(value),
+    responseSerialize: (value: PrepareOneSidedTransactionForSigningResponse) =>
+      Buffer.from(PrepareOneSidedTransactionForSigningResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer) => PrepareOneSidedTransactionForSigningResponse.decode(value),
+  },
+  broadcastSignedOneSidedTransaction: {
+    path: "/tari.rpc.Wallet/BroadcastSignedOneSidedTransaction",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: BroadcastSignedOneSidedTransactionRequest) =>
+      Buffer.from(BroadcastSignedOneSidedTransactionRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer) => BroadcastSignedOneSidedTransactionRequest.decode(value),
+    responseSerialize: (value: BroadcastSignedOneSidedTransactionResponse) =>
+      Buffer.from(BroadcastSignedOneSidedTransactionResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer) => BroadcastSignedOneSidedTransactionResponse.decode(value),
   },
   /**
    * This call supports standard interactive transactions (Mimblewimble),
@@ -6996,48 +8927,59 @@ export const WalletService = {
     responseDeserialize: (value: Buffer) => CreateTemplateRegistrationResponse.decode(value),
   },
   /**
-   * The SetBaseNode call configures the base node peer for the wallet.
+   * Signs a message using the wallet's node identity private key.
    *
-   * This RPC sets the public key and network address of the base node peer that the wallet should communicate with.
+   * The `SignMessage` call creates a Schnorr signature over a message using the wallet's node identity private key.
+   * This signature can be used to prove ownership of the wallet or authenticate messages.
+   * The signature is returned as separate components (signature and public nonce) for verification.
    *
-   * ### Request Fields:
-   * - `public_key_hex` (string): The public key of the base node, provided as a hex string.
-   * - `net_address` (string): The multiaddress of the base node (e.g., `/ip4/127.0.0.1/tcp/18141`).
+   * ### Request Parameters:
+   *
+   * - `message` (required):
+   *   - **Type**: `bytes`
+   *   - **Description**: The message to be signed (arbitrary bytes).
+   *   - **Restrictions**: Can be any byte sequence.
+   *
+   * ### Response Fields:
+   *
+   * - **signature**: The Schnorr signature as hex-encoded bytes.
+   * - **public_nonce**: The public nonce component of the signature as hex-encoded bytes.
    *
    * ### Example JavaScript gRPC client usage:
    *
    * ```javascript
    * const request = {
-   *   public_key_hex: "0281bdfc...",
-   *   net_address: "/ip4/127.0.0.1/tcp/18141"
+   *   message: Buffer.from("Hello Tari!", "utf-8")
    * };
-   * client.setBaseNode(request, (err, response) => {
+   * client.signMessage(request, (err, response) => {
    *   if (err) console.error(err);
-   *   else console.log("Base node set successfully");
+   *   else console.log("Signature:", response.signature, "Nonce:", response.public_nonce);
    * });
    * ```
    *
-   * ### Sample JSON Request:
+   * ### Sample JSON Response:
+   *
    * ```json
    * {
-   *   "public_key_hex": "0281bdfc...",
-   *   "net_address": "/ip4/127.0.0.1/tcp/18141"
+   *   "signature": "a1b2c3d4e5f6...",
+   *   "public_nonce": "f6e5d4c3b2a1..."
    * }
    * ```
    *
-   * ### Sample JSON Response:
-   * ```json
-   * {}
-   * ```
+   * ### Security Notes:
+   *
+   * - This signs with the wallet's node identity private key.
+   * - The signature can be verified using the wallet's public key.
+   * - Use this for authentication and ownership proofs only.
    */
-  setBaseNode: {
-    path: "/tari.rpc.Wallet/SetBaseNode",
+  signMessage: {
+    path: "/tari.rpc.Wallet/SignMessage",
     requestStream: false,
     responseStream: false,
-    requestSerialize: (value: SetBaseNodeRequest) => Buffer.from(SetBaseNodeRequest.encode(value).finish()),
-    requestDeserialize: (value: Buffer) => SetBaseNodeRequest.decode(value),
-    responseSerialize: (value: SetBaseNodeResponse) => Buffer.from(SetBaseNodeResponse.encode(value).finish()),
-    responseDeserialize: (value: Buffer) => SetBaseNodeResponse.decode(value),
+    requestSerialize: (value: SignMessageRequest) => Buffer.from(SignMessageRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer) => SignMessageRequest.decode(value),
+    responseSerialize: (value: SignMessageResponse) => Buffer.from(SignMessageResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer) => SignMessageResponse.decode(value),
   },
   /**
    * ### Example JavaScript gRPC client usage:
@@ -7083,17 +9025,6 @@ export const WalletService = {
       Buffer.from(TransactionEventResponse.encode(value).finish()),
     responseDeserialize: (value: Buffer) => TransactionEventResponse.decode(value),
   },
-  registerValidatorNode: {
-    path: "/tari.rpc.Wallet/RegisterValidatorNode",
-    requestStream: false,
-    responseStream: false,
-    requestSerialize: (value: RegisterValidatorNodeRequest) =>
-      Buffer.from(RegisterValidatorNodeRequest.encode(value).finish()),
-    requestDeserialize: (value: Buffer) => RegisterValidatorNodeRequest.decode(value),
-    responseSerialize: (value: RegisterValidatorNodeResponse) =>
-      Buffer.from(RegisterValidatorNodeResponse.encode(value).finish()),
-    responseDeserialize: (value: Buffer) => RegisterValidatorNodeResponse.decode(value),
-  },
   importTransactions: {
     path: "/tari.rpc.Wallet/ImportTransactions",
     requestStream: false,
@@ -7105,7 +9036,12 @@ export const WalletService = {
       Buffer.from(ImportTransactionsResponse.encode(value).finish()),
     responseDeserialize: (value: Buffer) => ImportTransactionsResponse.decode(value),
   },
-  /** Get all completed transactions including cancelled ones, sorted by timestamp and paginated */
+  /**
+   * Get all completed transactions including cancelled ones, sorted by timestamp and paginated
+   * DEPRECATED: Use GetAllCompletedTransactionsStream for better performance and memory efficiency
+   *
+   * @deprecated
+   */
   getAllCompletedTransactions: {
     path: "/tari.rpc.Wallet/GetAllCompletedTransactions",
     requestStream: false,
@@ -7116,6 +9052,21 @@ export const WalletService = {
     responseSerialize: (value: GetAllCompletedTransactionsResponse) =>
       Buffer.from(GetAllCompletedTransactionsResponse.encode(value).finish()),
     responseDeserialize: (value: Buffer) => GetAllCompletedTransactionsResponse.decode(value),
+  },
+  /**
+   * Get all completed transactions including cancelled ones, sorted by timestamp and paginated (streaming version)
+   * Recommended: Use this streaming version for better performance and progressive loading
+   */
+  getAllCompletedTransactionsStream: {
+    path: "/tari.rpc.Wallet/GetAllCompletedTransactionsStream",
+    requestStream: false,
+    responseStream: true,
+    requestSerialize: (value: GetAllCompletedTransactionsRequest) =>
+      Buffer.from(GetAllCompletedTransactionsRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer) => GetAllCompletedTransactionsRequest.decode(value),
+    responseSerialize: (value: GetCompletedTransactionsResponse) =>
+      Buffer.from(GetCompletedTransactionsResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer) => GetCompletedTransactionsResponse.decode(value),
   },
   /**
    * Gets transaction information by payment reference (PayRef)
@@ -7173,6 +9124,289 @@ export const WalletService = {
     responseSerialize: (value: GetPaymentByReferenceResponse) =>
       Buffer.from(GetPaymentByReferenceResponse.encode(value).finish()),
     responseDeserialize: (value: Buffer) => GetPaymentByReferenceResponse.decode(value),
+  },
+  /**
+   * Estimates the transaction fee based on amount, fee rate, and number of outputs.
+   *
+   * The `GetFeeEstimate` call allows clients to calculate the expected transaction fee before sending funds.
+   * This is useful for presenting fee information to the user or for ensuring sufficient funds are available.
+   *
+   * ### Request Parameters:
+   * - **amount** (required): The amount to send, in microTari. (1 Tari = 1,000,000 µT).
+   * - **fee_per_gram** (required): The fee per gram (weight unit) to use for the estimate. Higher values may improve priority.
+   * - **output_count** (required): The number of outputs to create in the transaction (e.g., 2 = recipient + change).
+   *
+   * ### Input Validation:
+   * - `amount` must be a non-zero `uint64` representing the amount to transfer.
+   * - `fee_per_gram` must be a non-zero `uint64`; zero or low fees may result in delayed confirmation or failure.
+   * - `output_count` must be convertible to a valid `usize`; large values may increase the fee significantly.
+   *
+   * ### Response Fields:
+   * - **estimated_fee**: A `uint64` value representing the estimated total transaction fee in microTari.
+   *
+   * ### Example JavaScript gRPC client usage:
+   * ```javascript
+   * const request = {
+   *   amount: 1000000,         // Sending 1 Tari
+   *   fee_per_gram: 5,         // Fee rate of 5 µT/g
+   *   output_count: 2          // One recipient + one change output
+   * };
+   * client.getFeeEstimate(request, (err, response) => {
+   *   if (err) console.error(err);
+   *   else console.log("Estimated fee:", response.estimated_fee);
+   * });
+   * ```
+   *
+   * ### Sample JSON Response:
+   * ```json
+   * {
+   *   "estimated_fee": 12345
+   * }
+   * ```
+   */
+  getFeeEstimate: {
+    path: "/tari.rpc.Wallet/GetFeeEstimate",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: GetFeeEstimateRequest) => Buffer.from(GetFeeEstimateRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer) => GetFeeEstimateRequest.decode(value),
+    responseSerialize: (value: GetFeeEstimateResponse) => Buffer.from(GetFeeEstimateResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer) => GetFeeEstimateResponse.decode(value),
+  },
+  /**
+   * Retrieves fee-per-gram statistics over recent blocks.
+   *
+   * The `GetFeePerGramStats` call returns aggregated fee rate information to help clients
+   * understand recent network fee trends. This can be used for setting appropriate fees
+   * when constructing transactions.
+   *
+   * ### Request Parameters:
+   * - **block_count** (optional): The number of recent blocks to include in the statistics.
+   *   If not specified or zero, a default number of blocks will be used.
+   *
+   * ### Input Validation:
+   * - `block_count` must be a non-negative `uint64`. Large values may increase query time.
+   *
+   * ### Response Fields:
+   * - **fee_per_gram_stats**: A list of `FeePerGramStat` objects summarizing fee data over the specified blocks.
+   *
+   * Each `FeePerGramStat` contains:
+   * - **average_fee_per_gram**: Average fee per gram observed over the blocks.
+   * - **min_fee_per_gram**: Minimum fee per gram observed.
+   * - **max_fee_per_gram**: Maximum fee per gram observed.
+   *
+   * ### Example JavaScript gRPC client usage:
+   * ```javascript
+   * const request = {
+   *   block_count: 10 // Consider fees over the last 10 blocks
+   * };
+   * client.getFeePerGramStats(request, (err, response) => {
+   *   if (err) console.error(err);
+   *   else response.fee_per_gram_stats.forEach(stat => {
+   *     console.log(`Avg: ${stat.average_fee_per_gram}, Min: ${stat.min_fee_per_gram}, Max: ${stat.max_fee_per_gram}`);
+   *   });
+   * });
+   * ```
+   *
+   * ### Sample JSON Response:
+   * ```json
+   * {
+   *   "fee_per_gram_stats": [
+   *     {
+   *       "average_fee_per_gram": 5,
+   *       "min_fee_per_gram": 3,
+   *       "max_fee_per_gram": 10
+   *     }
+   *   ]
+   * }
+   * ```
+   */
+  getFeePerGramStats: {
+    path: "/tari.rpc.Wallet/GetFeePerGramStats",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: GetFeePerGramStatsRequest) =>
+      Buffer.from(GetFeePerGramStatsRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer) => GetFeePerGramStatsRequest.decode(value),
+    responseSerialize: (value: GetFeePerGramStatsResponse) =>
+      Buffer.from(GetFeePerGramStatsResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer) => GetFeePerGramStatsResponse.decode(value),
+  },
+  /**
+   * Attempts to replace an existing transaction with a new one that has a higher fee.
+   *
+   * The `ReplaceByFee` call enables clients to increase the fee of a pending transaction,
+   * potentially speeding up its confirmation by incentivizing miners to prioritize it.
+   *
+   * ### Request Parameters:
+   * - **transaction_id** (required): The ID of the original transaction to replace.
+   * - **fee_increase** (required): The additional fee amount to add, specified in microTari.
+   *   Must be greater than zero.
+   *
+   * ### Input Validation:
+   * - `transaction_id` must correspond to a currently unconfirmed transaction.
+   * - `fee_increase` must be a non-zero `uint64`. Zero or negative values are invalid.
+   *
+   * ### Response Fields:
+   * - **transaction_id**: The transaction ID of the new replacement transaction.
+   *
+   * ### Example JavaScript gRPC client usage:
+   * ```javascript
+   * const request = {
+   *   transaction_id: 123456,
+   *   fee_increase: 5000  // Increase fee by 5,000 microTari
+   * };
+   * client.replaceByFee(request, (err, response) => {
+   *   if (err) console.error("Failed to replace by fee:", err);
+   *   else console.log("Replacement transaction ID:", response.transaction_id);
+   * });
+   * ```
+   *
+   * ### Sample JSON Response:
+   * ```json
+   * {
+   *   "transaction_id": 7891011
+   * }
+   * ```
+   */
+  replaceByFee: {
+    path: "/tari.rpc.Wallet/ReplaceByFee",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: ReplaceByFeeRequest) => Buffer.from(ReplaceByFeeRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer) => ReplaceByFeeRequest.decode(value),
+    responseSerialize: (value: ReplaceByFeeResponse) => Buffer.from(ReplaceByFeeResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer) => ReplaceByFeeResponse.decode(value),
+  },
+  /**
+   * Allows users to pay a specified fee for spending transaction outputs to given recipients.
+   *
+   * The `UserPayForFee` call enables clients to request that the wallet pays the fee
+   * for one or more transactions identified by their IDs, sending funds to the specified recipients.
+   * This is useful for fee bumping or covering transaction fees on behalf of recipients.
+   *
+   * ### Request Parameters:
+   * - **recipients** (required): A list of transfers, each specifying:
+   *    - `tx_id`: The transaction ID whose outputs will be spent.
+   *    - `fee`: The fee amount in microTari to pay for this transfer.
+   *    - `destination`: The Base58-encoded Tari address of the recipient.
+   *
+   * ### Input Validation:
+   * - Each `tx_id` must correspond to a valid transaction whose outputs can be spent.
+   * - Each `fee` must be a non-negative uint64 specifying the fee to pay.
+   * - Each `destination` must be a valid Base58 Tari address.
+   *
+   * ### Response Fields:
+   * - **results**: A list of `TransferResult` objects, one per requested recipient, each containing:
+   *    - `address`: The recipient address as a string.
+   *    - `transaction_id`: The ID of the newly created transaction (or zero if failed).
+   *    - `is_success`: Boolean indicating if the fee payment transaction succeeded.
+   *    - `failure_message`: A string describing the error if the transaction failed.
+   *    - `transaction_info`: Detailed transaction metadata if available.
+   *
+   * ### Example JavaScript gRPC client usage:
+   * ```javascript
+   * const request = {
+   *   recipients: [
+   *     {
+   *       tx_id: 123,
+   *       fee: 1000,
+   *       destination: "tari1qxyz..."
+   *     },
+   *     {
+   *       tx_id: 456,
+   *       fee: 2000,
+   *       destination: "tari1qabcd..."
+   *     }
+   *   ]
+   * };
+   * client.userPayForFee(request, (err, response) => {
+   *   if (err) console.error("Fee payment failed:", err);
+   *   else {
+   *     response.results.forEach(result => {
+   *       if (result.is_success) {
+   *         console.log(`Fee paid successfully to ${result.address} in tx ${result.transaction_id}`);
+   *       } else {
+   *         console.error(`Failed to pay fee for ${result.address}: ${result.failure_message}`);
+   *       }
+   *     });
+   *   }
+   * });
+   * ```
+   *
+   * ### Sample JSON Response:
+   * ```json
+   * {
+   *   "results": [
+   *     {
+   *       "address": "tari1qxyz...",
+   *       "transaction_id": 789,
+   *       "is_success": true,
+   *       "failure_message": "",
+   *       "transaction_info": {
+   *         "tx_id": 789,
+   *         "source_address": "...",
+   *         "dest_address": "...",
+   *         "status": "Completed",
+   *         "direction": "Outbound",
+   *         "amount": 50000,
+   *         "fee": 1000,
+   *         "is_cancelled": false,
+   *         "timestamp": 1620000000
+   *       }
+   *     },
+   *     {
+   *       "address": "tari1qabcd...",
+   *       "transaction_id": 0,
+   *       "is_success": false,
+   *       "failure_message": "Invalid destination address",
+   *       "transaction_info": null
+   *     }
+   *   ]
+   * }
+   * ```
+   */
+  userPayForFee: {
+    path: "/tari.rpc.Wallet/UserPayForFee",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: UserPayForFeeRequest) => Buffer.from(UserPayForFeeRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer) => UserPayForFeeRequest.decode(value),
+    responseSerialize: (value: UserPayForFeeResponse) => Buffer.from(UserPayForFeeResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer) => UserPayForFeeResponse.decode(value),
+  },
+  registerValidatorNode: {
+    path: "/tari.rpc.Wallet/RegisterValidatorNode",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: RegisterValidatorNodeRequest) =>
+      Buffer.from(RegisterValidatorNodeRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer) => RegisterValidatorNodeRequest.decode(value),
+    responseSerialize: (value: RegisterValidatorNodeResponse) =>
+      Buffer.from(RegisterValidatorNodeResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer) => RegisterValidatorNodeResponse.decode(value),
+  },
+  submitValidatorEvictionProof: {
+    path: "/tari.rpc.Wallet/SubmitValidatorEvictionProof",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: SubmitValidatorEvictionProofRequest) =>
+      Buffer.from(SubmitValidatorEvictionProofRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer) => SubmitValidatorEvictionProofRequest.decode(value),
+    responseSerialize: (value: SubmitValidatorEvictionProofResponse) =>
+      Buffer.from(SubmitValidatorEvictionProofResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer) => SubmitValidatorEvictionProofResponse.decode(value),
+  },
+  submitValidatorNodeExit: {
+    path: "/tari.rpc.Wallet/SubmitValidatorNodeExit",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: SubmitValidatorNodeExitRequest) =>
+      Buffer.from(SubmitValidatorNodeExitRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer) => SubmitValidatorNodeExitRequest.decode(value),
+    responseSerialize: (value: SubmitValidatorNodeExitResponse) =>
+      Buffer.from(SubmitValidatorNodeExitResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer) => SubmitValidatorNodeExitResponse.decode(value),
   },
 } as const;
 
@@ -7356,6 +9590,14 @@ export interface WalletServer extends UntypedServiceImplementation {
    * ```
    */
   getCompleteAddress: handleUnaryCall<Empty, GetCompleteAddressResponse>;
+  prepareOneSidedTransactionForSigning: handleUnaryCall<
+    PrepareOneSidedTransactionForSigningRequest,
+    PrepareOneSidedTransactionForSigningResponse
+  >;
+  broadcastSignedOneSidedTransaction: handleUnaryCall<
+    BroadcastSignedOneSidedTransactionRequest,
+    BroadcastSignedOneSidedTransactionResponse
+  >;
   /**
    * This call supports standard interactive transactions (Mimblewimble),
    * one-sided transactions, and one-sided-to-stealth-address transactions.
@@ -8101,41 +10343,52 @@ export interface WalletServer extends UntypedServiceImplementation {
   /** Creates a transaction with a template registration output */
   createTemplateRegistration: handleUnaryCall<CreateTemplateRegistrationRequest, CreateTemplateRegistrationResponse>;
   /**
-   * The SetBaseNode call configures the base node peer for the wallet.
+   * Signs a message using the wallet's node identity private key.
    *
-   * This RPC sets the public key and network address of the base node peer that the wallet should communicate with.
+   * The `SignMessage` call creates a Schnorr signature over a message using the wallet's node identity private key.
+   * This signature can be used to prove ownership of the wallet or authenticate messages.
+   * The signature is returned as separate components (signature and public nonce) for verification.
    *
-   * ### Request Fields:
-   * - `public_key_hex` (string): The public key of the base node, provided as a hex string.
-   * - `net_address` (string): The multiaddress of the base node (e.g., `/ip4/127.0.0.1/tcp/18141`).
+   * ### Request Parameters:
+   *
+   * - `message` (required):
+   *   - **Type**: `bytes`
+   *   - **Description**: The message to be signed (arbitrary bytes).
+   *   - **Restrictions**: Can be any byte sequence.
+   *
+   * ### Response Fields:
+   *
+   * - **signature**: The Schnorr signature as hex-encoded bytes.
+   * - **public_nonce**: The public nonce component of the signature as hex-encoded bytes.
    *
    * ### Example JavaScript gRPC client usage:
    *
    * ```javascript
    * const request = {
-   *   public_key_hex: "0281bdfc...",
-   *   net_address: "/ip4/127.0.0.1/tcp/18141"
+   *   message: Buffer.from("Hello Tari!", "utf-8")
    * };
-   * client.setBaseNode(request, (err, response) => {
+   * client.signMessage(request, (err, response) => {
    *   if (err) console.error(err);
-   *   else console.log("Base node set successfully");
+   *   else console.log("Signature:", response.signature, "Nonce:", response.public_nonce);
    * });
    * ```
    *
-   * ### Sample JSON Request:
+   * ### Sample JSON Response:
+   *
    * ```json
    * {
-   *   "public_key_hex": "0281bdfc...",
-   *   "net_address": "/ip4/127.0.0.1/tcp/18141"
+   *   "signature": "a1b2c3d4e5f6...",
+   *   "public_nonce": "f6e5d4c3b2a1..."
    * }
    * ```
    *
-   * ### Sample JSON Response:
-   * ```json
-   * {}
-   * ```
+   * ### Security Notes:
+   *
+   * - This signs with the wallet's node identity private key.
+   * - The signature can be verified using the wallet's public key.
+   * - Use this for authentication and ownership proofs only.
    */
-  setBaseNode: handleUnaryCall<SetBaseNodeRequest, SetBaseNodeResponse>;
+  signMessage: handleUnaryCall<SignMessageRequest, SignMessageResponse>;
   /**
    * ### Example JavaScript gRPC client usage:
    * ```javascript
@@ -8171,10 +10424,22 @@ export interface WalletServer extends UntypedServiceImplementation {
    * ```
    */
   streamTransactionEvents: handleServerStreamingCall<TransactionEventRequest, TransactionEventResponse>;
-  registerValidatorNode: handleUnaryCall<RegisterValidatorNodeRequest, RegisterValidatorNodeResponse>;
   importTransactions: handleUnaryCall<ImportTransactionsRequest, ImportTransactionsResponse>;
-  /** Get all completed transactions including cancelled ones, sorted by timestamp and paginated */
+  /**
+   * Get all completed transactions including cancelled ones, sorted by timestamp and paginated
+   * DEPRECATED: Use GetAllCompletedTransactionsStream for better performance and memory efficiency
+   *
+   * @deprecated
+   */
   getAllCompletedTransactions: handleUnaryCall<GetAllCompletedTransactionsRequest, GetAllCompletedTransactionsResponse>;
+  /**
+   * Get all completed transactions including cancelled ones, sorted by timestamp and paginated (streaming version)
+   * Recommended: Use this streaming version for better performance and progressive loading
+   */
+  getAllCompletedTransactionsStream: handleServerStreamingCall<
+    GetAllCompletedTransactionsRequest,
+    GetCompletedTransactionsResponse
+  >;
   /**
    * Gets transaction information by payment reference (PayRef)
    *
@@ -8222,6 +10487,228 @@ export interface WalletServer extends UntypedServiceImplementation {
    * ```
    */
   getPaymentByReference: handleUnaryCall<GetPaymentByReferenceRequest, GetPaymentByReferenceResponse>;
+  /**
+   * Estimates the transaction fee based on amount, fee rate, and number of outputs.
+   *
+   * The `GetFeeEstimate` call allows clients to calculate the expected transaction fee before sending funds.
+   * This is useful for presenting fee information to the user or for ensuring sufficient funds are available.
+   *
+   * ### Request Parameters:
+   * - **amount** (required): The amount to send, in microTari. (1 Tari = 1,000,000 µT).
+   * - **fee_per_gram** (required): The fee per gram (weight unit) to use for the estimate. Higher values may improve priority.
+   * - **output_count** (required): The number of outputs to create in the transaction (e.g., 2 = recipient + change).
+   *
+   * ### Input Validation:
+   * - `amount` must be a non-zero `uint64` representing the amount to transfer.
+   * - `fee_per_gram` must be a non-zero `uint64`; zero or low fees may result in delayed confirmation or failure.
+   * - `output_count` must be convertible to a valid `usize`; large values may increase the fee significantly.
+   *
+   * ### Response Fields:
+   * - **estimated_fee**: A `uint64` value representing the estimated total transaction fee in microTari.
+   *
+   * ### Example JavaScript gRPC client usage:
+   * ```javascript
+   * const request = {
+   *   amount: 1000000,         // Sending 1 Tari
+   *   fee_per_gram: 5,         // Fee rate of 5 µT/g
+   *   output_count: 2          // One recipient + one change output
+   * };
+   * client.getFeeEstimate(request, (err, response) => {
+   *   if (err) console.error(err);
+   *   else console.log("Estimated fee:", response.estimated_fee);
+   * });
+   * ```
+   *
+   * ### Sample JSON Response:
+   * ```json
+   * {
+   *   "estimated_fee": 12345
+   * }
+   * ```
+   */
+  getFeeEstimate: handleUnaryCall<GetFeeEstimateRequest, GetFeeEstimateResponse>;
+  /**
+   * Retrieves fee-per-gram statistics over recent blocks.
+   *
+   * The `GetFeePerGramStats` call returns aggregated fee rate information to help clients
+   * understand recent network fee trends. This can be used for setting appropriate fees
+   * when constructing transactions.
+   *
+   * ### Request Parameters:
+   * - **block_count** (optional): The number of recent blocks to include in the statistics.
+   *   If not specified or zero, a default number of blocks will be used.
+   *
+   * ### Input Validation:
+   * - `block_count` must be a non-negative `uint64`. Large values may increase query time.
+   *
+   * ### Response Fields:
+   * - **fee_per_gram_stats**: A list of `FeePerGramStat` objects summarizing fee data over the specified blocks.
+   *
+   * Each `FeePerGramStat` contains:
+   * - **average_fee_per_gram**: Average fee per gram observed over the blocks.
+   * - **min_fee_per_gram**: Minimum fee per gram observed.
+   * - **max_fee_per_gram**: Maximum fee per gram observed.
+   *
+   * ### Example JavaScript gRPC client usage:
+   * ```javascript
+   * const request = {
+   *   block_count: 10 // Consider fees over the last 10 blocks
+   * };
+   * client.getFeePerGramStats(request, (err, response) => {
+   *   if (err) console.error(err);
+   *   else response.fee_per_gram_stats.forEach(stat => {
+   *     console.log(`Avg: ${stat.average_fee_per_gram}, Min: ${stat.min_fee_per_gram}, Max: ${stat.max_fee_per_gram}`);
+   *   });
+   * });
+   * ```
+   *
+   * ### Sample JSON Response:
+   * ```json
+   * {
+   *   "fee_per_gram_stats": [
+   *     {
+   *       "average_fee_per_gram": 5,
+   *       "min_fee_per_gram": 3,
+   *       "max_fee_per_gram": 10
+   *     }
+   *   ]
+   * }
+   * ```
+   */
+  getFeePerGramStats: handleUnaryCall<GetFeePerGramStatsRequest, GetFeePerGramStatsResponse>;
+  /**
+   * Attempts to replace an existing transaction with a new one that has a higher fee.
+   *
+   * The `ReplaceByFee` call enables clients to increase the fee of a pending transaction,
+   * potentially speeding up its confirmation by incentivizing miners to prioritize it.
+   *
+   * ### Request Parameters:
+   * - **transaction_id** (required): The ID of the original transaction to replace.
+   * - **fee_increase** (required): The additional fee amount to add, specified in microTari.
+   *   Must be greater than zero.
+   *
+   * ### Input Validation:
+   * - `transaction_id` must correspond to a currently unconfirmed transaction.
+   * - `fee_increase` must be a non-zero `uint64`. Zero or negative values are invalid.
+   *
+   * ### Response Fields:
+   * - **transaction_id**: The transaction ID of the new replacement transaction.
+   *
+   * ### Example JavaScript gRPC client usage:
+   * ```javascript
+   * const request = {
+   *   transaction_id: 123456,
+   *   fee_increase: 5000  // Increase fee by 5,000 microTari
+   * };
+   * client.replaceByFee(request, (err, response) => {
+   *   if (err) console.error("Failed to replace by fee:", err);
+   *   else console.log("Replacement transaction ID:", response.transaction_id);
+   * });
+   * ```
+   *
+   * ### Sample JSON Response:
+   * ```json
+   * {
+   *   "transaction_id": 7891011
+   * }
+   * ```
+   */
+  replaceByFee: handleUnaryCall<ReplaceByFeeRequest, ReplaceByFeeResponse>;
+  /**
+   * Allows users to pay a specified fee for spending transaction outputs to given recipients.
+   *
+   * The `UserPayForFee` call enables clients to request that the wallet pays the fee
+   * for one or more transactions identified by their IDs, sending funds to the specified recipients.
+   * This is useful for fee bumping or covering transaction fees on behalf of recipients.
+   *
+   * ### Request Parameters:
+   * - **recipients** (required): A list of transfers, each specifying:
+   *    - `tx_id`: The transaction ID whose outputs will be spent.
+   *    - `fee`: The fee amount in microTari to pay for this transfer.
+   *    - `destination`: The Base58-encoded Tari address of the recipient.
+   *
+   * ### Input Validation:
+   * - Each `tx_id` must correspond to a valid transaction whose outputs can be spent.
+   * - Each `fee` must be a non-negative uint64 specifying the fee to pay.
+   * - Each `destination` must be a valid Base58 Tari address.
+   *
+   * ### Response Fields:
+   * - **results**: A list of `TransferResult` objects, one per requested recipient, each containing:
+   *    - `address`: The recipient address as a string.
+   *    - `transaction_id`: The ID of the newly created transaction (or zero if failed).
+   *    - `is_success`: Boolean indicating if the fee payment transaction succeeded.
+   *    - `failure_message`: A string describing the error if the transaction failed.
+   *    - `transaction_info`: Detailed transaction metadata if available.
+   *
+   * ### Example JavaScript gRPC client usage:
+   * ```javascript
+   * const request = {
+   *   recipients: [
+   *     {
+   *       tx_id: 123,
+   *       fee: 1000,
+   *       destination: "tari1qxyz..."
+   *     },
+   *     {
+   *       tx_id: 456,
+   *       fee: 2000,
+   *       destination: "tari1qabcd..."
+   *     }
+   *   ]
+   * };
+   * client.userPayForFee(request, (err, response) => {
+   *   if (err) console.error("Fee payment failed:", err);
+   *   else {
+   *     response.results.forEach(result => {
+   *       if (result.is_success) {
+   *         console.log(`Fee paid successfully to ${result.address} in tx ${result.transaction_id}`);
+   *       } else {
+   *         console.error(`Failed to pay fee for ${result.address}: ${result.failure_message}`);
+   *       }
+   *     });
+   *   }
+   * });
+   * ```
+   *
+   * ### Sample JSON Response:
+   * ```json
+   * {
+   *   "results": [
+   *     {
+   *       "address": "tari1qxyz...",
+   *       "transaction_id": 789,
+   *       "is_success": true,
+   *       "failure_message": "",
+   *       "transaction_info": {
+   *         "tx_id": 789,
+   *         "source_address": "...",
+   *         "dest_address": "...",
+   *         "status": "Completed",
+   *         "direction": "Outbound",
+   *         "amount": 50000,
+   *         "fee": 1000,
+   *         "is_cancelled": false,
+   *         "timestamp": 1620000000
+   *       }
+   *     },
+   *     {
+   *       "address": "tari1qabcd...",
+   *       "transaction_id": 0,
+   *       "is_success": false,
+   *       "failure_message": "Invalid destination address",
+   *       "transaction_info": null
+   *     }
+   *   ]
+   * }
+   * ```
+   */
+  userPayForFee: handleUnaryCall<UserPayForFeeRequest, UserPayForFeeResponse>;
+  registerValidatorNode: handleUnaryCall<RegisterValidatorNodeRequest, RegisterValidatorNodeResponse>;
+  submitValidatorEvictionProof: handleUnaryCall<
+    SubmitValidatorEvictionProofRequest,
+    SubmitValidatorEvictionProofResponse
+  >;
+  submitValidatorNodeExit: handleUnaryCall<SubmitValidatorNodeExitRequest, SubmitValidatorNodeExitResponse>;
 }
 
 export interface WalletClient extends Client {
@@ -8515,6 +11002,36 @@ export interface WalletClient extends Client {
     metadata: Metadata,
     options: Partial<CallOptions>,
     callback: (error: ServiceError | null, response: GetCompleteAddressResponse) => void,
+  ): ClientUnaryCall;
+  prepareOneSidedTransactionForSigning(
+    request: PrepareOneSidedTransactionForSigningRequest,
+    callback: (error: ServiceError | null, response: PrepareOneSidedTransactionForSigningResponse) => void,
+  ): ClientUnaryCall;
+  prepareOneSidedTransactionForSigning(
+    request: PrepareOneSidedTransactionForSigningRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: PrepareOneSidedTransactionForSigningResponse) => void,
+  ): ClientUnaryCall;
+  prepareOneSidedTransactionForSigning(
+    request: PrepareOneSidedTransactionForSigningRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: PrepareOneSidedTransactionForSigningResponse) => void,
+  ): ClientUnaryCall;
+  broadcastSignedOneSidedTransaction(
+    request: BroadcastSignedOneSidedTransactionRequest,
+    callback: (error: ServiceError | null, response: BroadcastSignedOneSidedTransactionResponse) => void,
+  ): ClientUnaryCall;
+  broadcastSignedOneSidedTransaction(
+    request: BroadcastSignedOneSidedTransactionRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: BroadcastSignedOneSidedTransactionResponse) => void,
+  ): ClientUnaryCall;
+  broadcastSignedOneSidedTransaction(
+    request: BroadcastSignedOneSidedTransactionRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: BroadcastSignedOneSidedTransactionResponse) => void,
   ): ClientUnaryCall;
   /**
    * This call supports standard interactive transactions (Mimblewimble),
@@ -9518,54 +12035,65 @@ export interface WalletClient extends Client {
     callback: (error: ServiceError | null, response: CreateTemplateRegistrationResponse) => void,
   ): ClientUnaryCall;
   /**
-   * The SetBaseNode call configures the base node peer for the wallet.
+   * Signs a message using the wallet's node identity private key.
    *
-   * This RPC sets the public key and network address of the base node peer that the wallet should communicate with.
+   * The `SignMessage` call creates a Schnorr signature over a message using the wallet's node identity private key.
+   * This signature can be used to prove ownership of the wallet or authenticate messages.
+   * The signature is returned as separate components (signature and public nonce) for verification.
    *
-   * ### Request Fields:
-   * - `public_key_hex` (string): The public key of the base node, provided as a hex string.
-   * - `net_address` (string): The multiaddress of the base node (e.g., `/ip4/127.0.0.1/tcp/18141`).
+   * ### Request Parameters:
+   *
+   * - `message` (required):
+   *   - **Type**: `bytes`
+   *   - **Description**: The message to be signed (arbitrary bytes).
+   *   - **Restrictions**: Can be any byte sequence.
+   *
+   * ### Response Fields:
+   *
+   * - **signature**: The Schnorr signature as hex-encoded bytes.
+   * - **public_nonce**: The public nonce component of the signature as hex-encoded bytes.
    *
    * ### Example JavaScript gRPC client usage:
    *
    * ```javascript
    * const request = {
-   *   public_key_hex: "0281bdfc...",
-   *   net_address: "/ip4/127.0.0.1/tcp/18141"
+   *   message: Buffer.from("Hello Tari!", "utf-8")
    * };
-   * client.setBaseNode(request, (err, response) => {
+   * client.signMessage(request, (err, response) => {
    *   if (err) console.error(err);
-   *   else console.log("Base node set successfully");
+   *   else console.log("Signature:", response.signature, "Nonce:", response.public_nonce);
    * });
    * ```
    *
-   * ### Sample JSON Request:
+   * ### Sample JSON Response:
+   *
    * ```json
    * {
-   *   "public_key_hex": "0281bdfc...",
-   *   "net_address": "/ip4/127.0.0.1/tcp/18141"
+   *   "signature": "a1b2c3d4e5f6...",
+   *   "public_nonce": "f6e5d4c3b2a1..."
    * }
    * ```
    *
-   * ### Sample JSON Response:
-   * ```json
-   * {}
-   * ```
+   * ### Security Notes:
+   *
+   * - This signs with the wallet's node identity private key.
+   * - The signature can be verified using the wallet's public key.
+   * - Use this for authentication and ownership proofs only.
    */
-  setBaseNode(
-    request: SetBaseNodeRequest,
-    callback: (error: ServiceError | null, response: SetBaseNodeResponse) => void,
+  signMessage(
+    request: SignMessageRequest,
+    callback: (error: ServiceError | null, response: SignMessageResponse) => void,
   ): ClientUnaryCall;
-  setBaseNode(
-    request: SetBaseNodeRequest,
+  signMessage(
+    request: SignMessageRequest,
     metadata: Metadata,
-    callback: (error: ServiceError | null, response: SetBaseNodeResponse) => void,
+    callback: (error: ServiceError | null, response: SignMessageResponse) => void,
   ): ClientUnaryCall;
-  setBaseNode(
-    request: SetBaseNodeRequest,
+  signMessage(
+    request: SignMessageRequest,
     metadata: Metadata,
     options: Partial<CallOptions>,
-    callback: (error: ServiceError | null, response: SetBaseNodeResponse) => void,
+    callback: (error: ServiceError | null, response: SignMessageResponse) => void,
   ): ClientUnaryCall;
   /**
    * ### Example JavaScript gRPC client usage:
@@ -9610,21 +12138,6 @@ export interface WalletClient extends Client {
     metadata?: Metadata,
     options?: Partial<CallOptions>,
   ): ClientReadableStream<TransactionEventResponse>;
-  registerValidatorNode(
-    request: RegisterValidatorNodeRequest,
-    callback: (error: ServiceError | null, response: RegisterValidatorNodeResponse) => void,
-  ): ClientUnaryCall;
-  registerValidatorNode(
-    request: RegisterValidatorNodeRequest,
-    metadata: Metadata,
-    callback: (error: ServiceError | null, response: RegisterValidatorNodeResponse) => void,
-  ): ClientUnaryCall;
-  registerValidatorNode(
-    request: RegisterValidatorNodeRequest,
-    metadata: Metadata,
-    options: Partial<CallOptions>,
-    callback: (error: ServiceError | null, response: RegisterValidatorNodeResponse) => void,
-  ): ClientUnaryCall;
   importTransactions(
     request: ImportTransactionsRequest,
     callback: (error: ServiceError | null, response: ImportTransactionsResponse) => void,
@@ -9640,7 +12153,12 @@ export interface WalletClient extends Client {
     options: Partial<CallOptions>,
     callback: (error: ServiceError | null, response: ImportTransactionsResponse) => void,
   ): ClientUnaryCall;
-  /** Get all completed transactions including cancelled ones, sorted by timestamp and paginated */
+  /**
+   * Get all completed transactions including cancelled ones, sorted by timestamp and paginated
+   * DEPRECATED: Use GetAllCompletedTransactionsStream for better performance and memory efficiency
+   *
+   * @deprecated
+   */
   getAllCompletedTransactions(
     request: GetAllCompletedTransactionsRequest,
     callback: (error: ServiceError | null, response: GetAllCompletedTransactionsResponse) => void,
@@ -9656,6 +12174,19 @@ export interface WalletClient extends Client {
     options: Partial<CallOptions>,
     callback: (error: ServiceError | null, response: GetAllCompletedTransactionsResponse) => void,
   ): ClientUnaryCall;
+  /**
+   * Get all completed transactions including cancelled ones, sorted by timestamp and paginated (streaming version)
+   * Recommended: Use this streaming version for better performance and progressive loading
+   */
+  getAllCompletedTransactionsStream(
+    request: GetAllCompletedTransactionsRequest,
+    options?: Partial<CallOptions>,
+  ): ClientReadableStream<GetCompletedTransactionsResponse>;
+  getAllCompletedTransactionsStream(
+    request: GetAllCompletedTransactionsRequest,
+    metadata?: Metadata,
+    options?: Partial<CallOptions>,
+  ): ClientReadableStream<GetCompletedTransactionsResponse>;
   /**
    * Gets transaction information by payment reference (PayRef)
    *
@@ -9716,6 +12247,323 @@ export interface WalletClient extends Client {
     metadata: Metadata,
     options: Partial<CallOptions>,
     callback: (error: ServiceError | null, response: GetPaymentByReferenceResponse) => void,
+  ): ClientUnaryCall;
+  /**
+   * Estimates the transaction fee based on amount, fee rate, and number of outputs.
+   *
+   * The `GetFeeEstimate` call allows clients to calculate the expected transaction fee before sending funds.
+   * This is useful for presenting fee information to the user or for ensuring sufficient funds are available.
+   *
+   * ### Request Parameters:
+   * - **amount** (required): The amount to send, in microTari. (1 Tari = 1,000,000 µT).
+   * - **fee_per_gram** (required): The fee per gram (weight unit) to use for the estimate. Higher values may improve priority.
+   * - **output_count** (required): The number of outputs to create in the transaction (e.g., 2 = recipient + change).
+   *
+   * ### Input Validation:
+   * - `amount` must be a non-zero `uint64` representing the amount to transfer.
+   * - `fee_per_gram` must be a non-zero `uint64`; zero or low fees may result in delayed confirmation or failure.
+   * - `output_count` must be convertible to a valid `usize`; large values may increase the fee significantly.
+   *
+   * ### Response Fields:
+   * - **estimated_fee**: A `uint64` value representing the estimated total transaction fee in microTari.
+   *
+   * ### Example JavaScript gRPC client usage:
+   * ```javascript
+   * const request = {
+   *   amount: 1000000,         // Sending 1 Tari
+   *   fee_per_gram: 5,         // Fee rate of 5 µT/g
+   *   output_count: 2          // One recipient + one change output
+   * };
+   * client.getFeeEstimate(request, (err, response) => {
+   *   if (err) console.error(err);
+   *   else console.log("Estimated fee:", response.estimated_fee);
+   * });
+   * ```
+   *
+   * ### Sample JSON Response:
+   * ```json
+   * {
+   *   "estimated_fee": 12345
+   * }
+   * ```
+   */
+  getFeeEstimate(
+    request: GetFeeEstimateRequest,
+    callback: (error: ServiceError | null, response: GetFeeEstimateResponse) => void,
+  ): ClientUnaryCall;
+  getFeeEstimate(
+    request: GetFeeEstimateRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: GetFeeEstimateResponse) => void,
+  ): ClientUnaryCall;
+  getFeeEstimate(
+    request: GetFeeEstimateRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: GetFeeEstimateResponse) => void,
+  ): ClientUnaryCall;
+  /**
+   * Retrieves fee-per-gram statistics over recent blocks.
+   *
+   * The `GetFeePerGramStats` call returns aggregated fee rate information to help clients
+   * understand recent network fee trends. This can be used for setting appropriate fees
+   * when constructing transactions.
+   *
+   * ### Request Parameters:
+   * - **block_count** (optional): The number of recent blocks to include in the statistics.
+   *   If not specified or zero, a default number of blocks will be used.
+   *
+   * ### Input Validation:
+   * - `block_count` must be a non-negative `uint64`. Large values may increase query time.
+   *
+   * ### Response Fields:
+   * - **fee_per_gram_stats**: A list of `FeePerGramStat` objects summarizing fee data over the specified blocks.
+   *
+   * Each `FeePerGramStat` contains:
+   * - **average_fee_per_gram**: Average fee per gram observed over the blocks.
+   * - **min_fee_per_gram**: Minimum fee per gram observed.
+   * - **max_fee_per_gram**: Maximum fee per gram observed.
+   *
+   * ### Example JavaScript gRPC client usage:
+   * ```javascript
+   * const request = {
+   *   block_count: 10 // Consider fees over the last 10 blocks
+   * };
+   * client.getFeePerGramStats(request, (err, response) => {
+   *   if (err) console.error(err);
+   *   else response.fee_per_gram_stats.forEach(stat => {
+   *     console.log(`Avg: ${stat.average_fee_per_gram}, Min: ${stat.min_fee_per_gram}, Max: ${stat.max_fee_per_gram}`);
+   *   });
+   * });
+   * ```
+   *
+   * ### Sample JSON Response:
+   * ```json
+   * {
+   *   "fee_per_gram_stats": [
+   *     {
+   *       "average_fee_per_gram": 5,
+   *       "min_fee_per_gram": 3,
+   *       "max_fee_per_gram": 10
+   *     }
+   *   ]
+   * }
+   * ```
+   */
+  getFeePerGramStats(
+    request: GetFeePerGramStatsRequest,
+    callback: (error: ServiceError | null, response: GetFeePerGramStatsResponse) => void,
+  ): ClientUnaryCall;
+  getFeePerGramStats(
+    request: GetFeePerGramStatsRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: GetFeePerGramStatsResponse) => void,
+  ): ClientUnaryCall;
+  getFeePerGramStats(
+    request: GetFeePerGramStatsRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: GetFeePerGramStatsResponse) => void,
+  ): ClientUnaryCall;
+  /**
+   * Attempts to replace an existing transaction with a new one that has a higher fee.
+   *
+   * The `ReplaceByFee` call enables clients to increase the fee of a pending transaction,
+   * potentially speeding up its confirmation by incentivizing miners to prioritize it.
+   *
+   * ### Request Parameters:
+   * - **transaction_id** (required): The ID of the original transaction to replace.
+   * - **fee_increase** (required): The additional fee amount to add, specified in microTari.
+   *   Must be greater than zero.
+   *
+   * ### Input Validation:
+   * - `transaction_id` must correspond to a currently unconfirmed transaction.
+   * - `fee_increase` must be a non-zero `uint64`. Zero or negative values are invalid.
+   *
+   * ### Response Fields:
+   * - **transaction_id**: The transaction ID of the new replacement transaction.
+   *
+   * ### Example JavaScript gRPC client usage:
+   * ```javascript
+   * const request = {
+   *   transaction_id: 123456,
+   *   fee_increase: 5000  // Increase fee by 5,000 microTari
+   * };
+   * client.replaceByFee(request, (err, response) => {
+   *   if (err) console.error("Failed to replace by fee:", err);
+   *   else console.log("Replacement transaction ID:", response.transaction_id);
+   * });
+   * ```
+   *
+   * ### Sample JSON Response:
+   * ```json
+   * {
+   *   "transaction_id": 7891011
+   * }
+   * ```
+   */
+  replaceByFee(
+    request: ReplaceByFeeRequest,
+    callback: (error: ServiceError | null, response: ReplaceByFeeResponse) => void,
+  ): ClientUnaryCall;
+  replaceByFee(
+    request: ReplaceByFeeRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: ReplaceByFeeResponse) => void,
+  ): ClientUnaryCall;
+  replaceByFee(
+    request: ReplaceByFeeRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: ReplaceByFeeResponse) => void,
+  ): ClientUnaryCall;
+  /**
+   * Allows users to pay a specified fee for spending transaction outputs to given recipients.
+   *
+   * The `UserPayForFee` call enables clients to request that the wallet pays the fee
+   * for one or more transactions identified by their IDs, sending funds to the specified recipients.
+   * This is useful for fee bumping or covering transaction fees on behalf of recipients.
+   *
+   * ### Request Parameters:
+   * - **recipients** (required): A list of transfers, each specifying:
+   *    - `tx_id`: The transaction ID whose outputs will be spent.
+   *    - `fee`: The fee amount in microTari to pay for this transfer.
+   *    - `destination`: The Base58-encoded Tari address of the recipient.
+   *
+   * ### Input Validation:
+   * - Each `tx_id` must correspond to a valid transaction whose outputs can be spent.
+   * - Each `fee` must be a non-negative uint64 specifying the fee to pay.
+   * - Each `destination` must be a valid Base58 Tari address.
+   *
+   * ### Response Fields:
+   * - **results**: A list of `TransferResult` objects, one per requested recipient, each containing:
+   *    - `address`: The recipient address as a string.
+   *    - `transaction_id`: The ID of the newly created transaction (or zero if failed).
+   *    - `is_success`: Boolean indicating if the fee payment transaction succeeded.
+   *    - `failure_message`: A string describing the error if the transaction failed.
+   *    - `transaction_info`: Detailed transaction metadata if available.
+   *
+   * ### Example JavaScript gRPC client usage:
+   * ```javascript
+   * const request = {
+   *   recipients: [
+   *     {
+   *       tx_id: 123,
+   *       fee: 1000,
+   *       destination: "tari1qxyz..."
+   *     },
+   *     {
+   *       tx_id: 456,
+   *       fee: 2000,
+   *       destination: "tari1qabcd..."
+   *     }
+   *   ]
+   * };
+   * client.userPayForFee(request, (err, response) => {
+   *   if (err) console.error("Fee payment failed:", err);
+   *   else {
+   *     response.results.forEach(result => {
+   *       if (result.is_success) {
+   *         console.log(`Fee paid successfully to ${result.address} in tx ${result.transaction_id}`);
+   *       } else {
+   *         console.error(`Failed to pay fee for ${result.address}: ${result.failure_message}`);
+   *       }
+   *     });
+   *   }
+   * });
+   * ```
+   *
+   * ### Sample JSON Response:
+   * ```json
+   * {
+   *   "results": [
+   *     {
+   *       "address": "tari1qxyz...",
+   *       "transaction_id": 789,
+   *       "is_success": true,
+   *       "failure_message": "",
+   *       "transaction_info": {
+   *         "tx_id": 789,
+   *         "source_address": "...",
+   *         "dest_address": "...",
+   *         "status": "Completed",
+   *         "direction": "Outbound",
+   *         "amount": 50000,
+   *         "fee": 1000,
+   *         "is_cancelled": false,
+   *         "timestamp": 1620000000
+   *       }
+   *     },
+   *     {
+   *       "address": "tari1qabcd...",
+   *       "transaction_id": 0,
+   *       "is_success": false,
+   *       "failure_message": "Invalid destination address",
+   *       "transaction_info": null
+   *     }
+   *   ]
+   * }
+   * ```
+   */
+  userPayForFee(
+    request: UserPayForFeeRequest,
+    callback: (error: ServiceError | null, response: UserPayForFeeResponse) => void,
+  ): ClientUnaryCall;
+  userPayForFee(
+    request: UserPayForFeeRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: UserPayForFeeResponse) => void,
+  ): ClientUnaryCall;
+  userPayForFee(
+    request: UserPayForFeeRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: UserPayForFeeResponse) => void,
+  ): ClientUnaryCall;
+  registerValidatorNode(
+    request: RegisterValidatorNodeRequest,
+    callback: (error: ServiceError | null, response: RegisterValidatorNodeResponse) => void,
+  ): ClientUnaryCall;
+  registerValidatorNode(
+    request: RegisterValidatorNodeRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: RegisterValidatorNodeResponse) => void,
+  ): ClientUnaryCall;
+  registerValidatorNode(
+    request: RegisterValidatorNodeRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: RegisterValidatorNodeResponse) => void,
+  ): ClientUnaryCall;
+  submitValidatorEvictionProof(
+    request: SubmitValidatorEvictionProofRequest,
+    callback: (error: ServiceError | null, response: SubmitValidatorEvictionProofResponse) => void,
+  ): ClientUnaryCall;
+  submitValidatorEvictionProof(
+    request: SubmitValidatorEvictionProofRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: SubmitValidatorEvictionProofResponse) => void,
+  ): ClientUnaryCall;
+  submitValidatorEvictionProof(
+    request: SubmitValidatorEvictionProofRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: SubmitValidatorEvictionProofResponse) => void,
+  ): ClientUnaryCall;
+  submitValidatorNodeExit(
+    request: SubmitValidatorNodeExitRequest,
+    callback: (error: ServiceError | null, response: SubmitValidatorNodeExitResponse) => void,
+  ): ClientUnaryCall;
+  submitValidatorNodeExit(
+    request: SubmitValidatorNodeExitRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: SubmitValidatorNodeExitResponse) => void,
+  ): ClientUnaryCall;
+  submitValidatorNodeExit(
+    request: SubmitValidatorNodeExitRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: SubmitValidatorNodeExitResponse) => void,
   ): ClientUnaryCall;
 }
 
