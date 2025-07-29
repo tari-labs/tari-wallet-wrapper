@@ -14,7 +14,7 @@ describe('TariWalletGrpcClient', () => {
   });
 
   beforeAll(async () => {
-    client = new TariWalletGrpcClient('localhost:18183');
+    client = new TariWalletGrpcClient('127.0.0.1:18183');
      stream = await client.streamTransactionEvents();
       
   });

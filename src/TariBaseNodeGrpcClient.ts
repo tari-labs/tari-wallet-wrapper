@@ -1,9 +1,10 @@
 import { ChannelCredentials, ServiceError } from "@grpc/grpc-js";
 
-import { BaseNodeClient, BlockHeaderResponse, TipInfoResponse, GetBlocksRequest, GetNetworkStateRequest, GetNetworkStateResponse, StringValue, ValueAtHeightResponse } from "./client/base_node.js";
+import { BaseNodeClient, BlockHeaderResponse, TipInfoResponse, GetBlocksRequest, GetNetworkStateRequest, GetNetworkStateResponse, ValueAtHeightResponse } from "./client/base_node.js";
 import { HistoricalBlock } from "./client/block.js";
 import { Empty } from "./client/types.js";
 import Long from "long";
+import { GetVersionResponse } from "./client/wallet.js";
 
 export interface ITariBaseNodeGrpcClient {
   close(): void;
@@ -64,8 +65,8 @@ export class TariBaseNodeGrpcClient implements ITariBaseNodeGrpcClient {
 
   public async getVersion(): Promise<string> {
     const request = Empty.create();
-    const response = await new Promise<StringValue>((resolve, reject) => {
-      this.client.getVersion(request, (error: ServiceError | null, response: StringValue) => {
+    const response = await new Promise<GetVersionResponse>((resolve, reject) => {
+      this.client.getVersion(request, (error: ServiceError | null, response: GetVersionResponse) => {
         if (error) {
           reject(error);
         } else {
@@ -73,7 +74,7 @@ export class TariBaseNodeGrpcClient implements ITariBaseNodeGrpcClient {
         }
       });
     });
-    return response.value;
+    return response.version;
   }
 
   public async *getTokensInCirculation(heights: number[] = []): AsyncIterable<ValueAtHeightResponse> {

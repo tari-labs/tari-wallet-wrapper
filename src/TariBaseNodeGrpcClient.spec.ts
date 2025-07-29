@@ -12,13 +12,14 @@ describe('TariBaseNodeGrpcClient', () => {
   });
 
   beforeAll(async () => {
-    client = new TariBaseNodeGrpcClient('localhost:18182');
+    client = new TariBaseNodeGrpcClient('127.0.0.1:18142');
   });
 
   describe('getVersion', () => {
     it('should return version', async () => {
       // Act
       const result = await client.getVersion();
+
 
       // Assert
       expect(result).toBeDefined();
