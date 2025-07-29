@@ -47,7 +47,6 @@ export class TariBaseNodeGrpcClient implements ITariBaseNodeGrpcClient {
           async next() {
             return new Promise((resolve, reject) => {
               stream.on('data', (block: HistoricalBlock) => {
-                console.log('block', block);
                 resolve({ value: block, done: false });
               });
               stream.on('end', () => {

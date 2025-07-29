@@ -39,7 +39,7 @@ describe('TariWalletGrpcClient', () => {
     it('should return connectivity status', async () => {
       // Act
       const result = await client.checkConnectivity();
-      
+      console.log('result', result);
       // Assert
       expect(result).toBeDefined();
       expect(result.status).toBeDefined();

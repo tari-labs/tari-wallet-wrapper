@@ -61,14 +61,6 @@ describe('TariBaseNodeGrpcClient', () => {
       const request = GetBlocksRequest.create({
         heights: [Long.fromNumber(1), Long.fromNumber(2)]
       });
-      const blocksPromise = new Promise<HistoricalBlock[]>((resolve, reject) => {
-        const stream = client.getBlocks(request);
-      
-      });
-      // Arrange
-   
-
-      // Act
       const blocks: any[] = [];
       for await (const block of client.getBlocks(request)) {
         blocks.push(block);
@@ -80,7 +72,7 @@ describe('TariBaseNodeGrpcClient', () => {
       expect(blocks.length).toBeGreaterThan(0);
       
       // Verify block structure
-      blocks.forEach(block => {
+      blocks.forEach(({block}) => {
         expect(block).toHaveProperty('header');
         expect(block).toHaveProperty('body');
         expect(block.header).toHaveProperty('height');
