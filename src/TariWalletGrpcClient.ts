@@ -18,6 +18,8 @@ import {
   GetCompleteAddressResponse,
   GetBlockHeightTransactionsResponse,
   GetBlockHeightTransactionsRequest,
+  CoinSplitRequest,
+  CoinSplitResponse,
 } from "./client/wallet";
 import { GetIdentityResponse } from "./client/network";
 import { ClientReadableStream } from "@grpc/grpc-js";
@@ -111,6 +113,19 @@ export class TariWalletGrpcClient implements ITariWalletGrpcClient {
     return stateResponse;
   }
 
+  public async coinSplit(coinSplitRequest: CoinSplitRequest): Promise<CoinSplitResponse> {
+    const stateResponse = await new Promise<CoinSplitResponse>((resolve, reject) => {
+      this.client.coinSplit(coinSplitRequest, (error: ServiceError | null, response: CoinSplitResponse) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(response);
+        }
+      });
+    });
+    return stateResponse;
+  }
+  
   public async getAddress(): Promise<GetCompleteAddressResponse> {
     const stateResponse = await new Promise<GetCompleteAddressResponse>((resolve, reject) => {
       this.client.getCompleteAddress({}, (error: ServiceError | null, response: GetCompleteAddressResponse) => {
