@@ -21,6 +21,10 @@ import {
   CoinSplitResponse,
   CancelTransactionRequest,
   CancelTransactionResponse,
+  GetAllCompletedTransactionsRequest,
+  GetCompletedTransactionsResponse,
+  GetTransactionInfoRequest,
+  GetTransactionInfoResponse,
 } from "./client/wallet";
 import { GetIdentityResponse } from "./client/network";
 import { ClientReadableStream } from "@grpc/grpc-js";
@@ -37,6 +41,8 @@ export interface ITariWalletGrpcClient {
   sendShaAtomicSwap(sendRequest: SendShaAtomicSwapRequest): Promise<SendShaAtomicSwapResponse>;
   claimShaAtomicSwap(claimRequest: ClaimShaAtomicSwapRequest): Promise<ClaimShaAtomicSwapResponse>;
   cancelTransaction(request: CancelTransactionRequest): Promise<CancelTransactionResponse>;
+  getTransactionHistory(request?: GetAllCompletedTransactionsRequest): Promise<ClientReadableStream<GetCompletedTransactionsResponse>>;
+  getTransactionInfo(request: GetTransactionInfoRequest): Promise<GetTransactionInfoResponse>;
 }
 
 export class TariWalletGrpcClient implements ITariWalletGrpcClient {
@@ -225,6 +231,28 @@ export class TariWalletGrpcClient implements ITariWalletGrpcClient {
   public async cancelTransaction(request: CancelTransactionRequest): Promise<CancelTransactionResponse> {
     return new Promise<CancelTransactionResponse>((resolve, reject) => {
       this.client.cancelTransaction(request, (error: ServiceError | null, response: CancelTransactionResponse) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(response);
+        }
+      });
+    });
+  }
+
+  public async getTransactionHistory(request?: GetAllCompletedTransactionsRequest): Promise<ClientReadableStream<GetCompletedTransactionsResponse>> {
+    const defaultRequest = {
+      offset: 0,
+      limit: 100,
+      statusBitflag: 0, // All statuses
+      ...request
+    };
+    return this.client.getAllCompletedTransactionsStream(defaultRequest);
+  }
+
+  public async getTransactionInfo(request: GetTransactionInfoRequest): Promise<GetTransactionInfoResponse> {
+    return new Promise<GetTransactionInfoResponse>((resolve, reject) => {
+      this.client.getTransactionInfo(request, (error: ServiceError | null, response: GetTransactionInfoResponse) => {
         if (error) {
           reject(error);
         } else {

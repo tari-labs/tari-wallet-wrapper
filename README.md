@@ -79,6 +79,21 @@ if (cancelResult.isSuccess) {
   console.log('Failed to cancel:', cancelResult.failureMessage);
 }
 
+// Get transaction history (streaming)
+const historyStream = await client.getTransactionHistory({
+  offset: 0,
+  limit: 50,
+  statusBitflag: 0 // All statuses
+});
+
+historyStream.on('data', (transaction) => {
+  console.log('Transaction:', transaction);
+});
+
+// Get specific transaction info by ID
+const txInfo = await client.getTransactionInfo({ txId: 12345 });
+console.log('Transaction details:', txInfo);
+
 // Close the connection when done
 client.close();
 ```
