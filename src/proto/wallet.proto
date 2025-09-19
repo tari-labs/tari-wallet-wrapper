@@ -108,7 +108,7 @@ service Wallet {
   // The `Identify` RPC call returns the identity information of the wallet node.
   // This includes:
   // - **Public Key**: The wallet's cryptographic public key.
-  // - **Public Address**: The wallet's public address used to receive funds.
+  // - **Public Address**: This will always be empty as the wallet has no contactable public comms address.
   // - **Node ID**: The unique identifier of the wallet node in the network.
   //
   // Example usage (JavaScript):
@@ -128,7 +128,7 @@ service Wallet {
   // ```json
   // {
   //   "public_key": "0x04b2c5f3fe65bb1c3cde019e34f3eab1234598c820dca43bbf4d5686a980ddc69e0d4b180d85990d0a5e4aee46e0a6ad9283f0a41783992a70c548e53e47321fa",
-  //   "public_address": "14HVCEeZC2RGE4SDn3yGwqzXepJ2LDqXva7kb4fherYMQR9dF7341T3TjMZobB1a6xouGvS5SXwEvXKwK3zLz2rgReh",
+  //   "public_address": "",
   //   "node_id": "0x1234abcd5678efgh9012ijkl3456mnop"
   // }
   // ```
@@ -226,11 +226,15 @@ service Wallet {
 
   rpc PrepareOneSidedTransactionForSigning (PrepareOneSidedTransactionForSigningRequest)  returns (PrepareOneSidedTransactionForSigningResponse);
 
+  rpc PrepareDepositMultisigTransaction (PrepareDepositMultisigTransactionRequest) returns (PrepareDepositMultisigTransactionResponse);
+  rpc PrepareWithdrawMultisigTransaction (PrepareWithdrawMultisigTransactionRequest) returns (PrepareWithdrawMultisigTransactionResponse);
+
   rpc BroadcastSignedOneSidedTransaction  (BroadcastSignedOneSidedTransactionRequest)  returns (BroadcastSignedOneSidedTransactionResponse);
 
   // This call supports standard interactive transactions (Mimblewimble),
   // one-sided transactions, and one-sided-to-stealth-address transactions.
   // Each recipient must include a valid Tari address, amount, fee, and payment type.
+  // SingleTx is used to indicate should this be sent as a single MW tx or multiple, one tx per recipient.
   //
   // ### Example JavaScript gRPC client usage:
   //
@@ -244,6 +248,7 @@ service Wallet {
   //
   // const request = new TransferRequest();
   // request.setRecipientsList([recipient]);
+  // request.setSingleTx(false);
   //
   // client.transfer(request, (err, response) => {
   //   if (err) console.error(err);
@@ -681,7 +686,7 @@ service Wallet {
   // {
   //   "status": "ONLINE",
   //   "avg_latency_ms": 142,
-  //   "num_node_connections": 8
+  //   "num_node_connections": 1
   // }
   // ```
   //
@@ -689,13 +694,16 @@ service Wallet {
   //
   // The `status` field indicates the current network connectivity of the wallet. Possible values are:
   //
+  // - `INITIALIZING`:
+  //   - The wallet connectivity is busy initializing.
+  //
   // - `ONLINE`:
   //   - The wallet is fully connected to the network and functioning normally.
-  //   - The node has enough active peer connections to operate efficiently.
   //
   // - `DEGRADED`:
-  //   - The wallet is connected to some peers but not enough to maintain full functionality.
-  //   - This could indicate issues with network connectivity, such as intermittent disconnections or insufficient peers, leading to reduced performance or reliability.
+  //   - The wallet is connected but has high latency.
+  //   - This could indicate issues with network connectivity, such as as a congested network, leading to reduced
+  //     performance or reliability.
   //
   // - `OFFLINE`:
   //   - The wallet is not connected to any peers.
@@ -703,11 +711,10 @@ service Wallet {
   //
   rpc GetNetworkStatus(Empty) returns (NetworkStatusResponse);
 
-  // Returns a list of peers currently connected to the wallet.
+  // Returns a list of HTTP peers currently connected to the wallet.
   //
-  // The `ListConnectedPeers` call retrieves information about peers that the wallet is currently
-  // connected to. This includes details such as peer addresses, connection status, supported protocols,
-  // and other metadata relevant to the connection.
+  // The `GetConnectedHttpPeer` call retrieves information about the HTTP peer that the wallet is currently
+  // connected to. The response is a `GetConnectedHttpPeerResponse` containing a list of `HttpPeer` objects.
   //
   // ### Request Parameters:
   //
@@ -717,23 +724,15 @@ service Wallet {
   //
   // ### Response Fields:
   //
-  // - **connected_peers**: List of peers currently connected to the wallet.
-  //   - **public_key**: The peer's public key (bytes).
-  //   - **node_id**: The unique node ID of the peer (bytes).
-  //   - **addresses**: List of the peer's addresses (repeated Address).
-  //   - **last_connection**: The timestamp of the last connection attempt (uint64).
-  //   - **flags**: Flags associated with the peer (uint32).
-  //   - **banned_until**: The timestamp until which the peer is banned (uint64, 0 if not banned).
-  //   - **banned_reason**: The reason for banning the peer (string, empty if not banned).
-  //   - **offline_at**: The timestamp indicating when the peer went offline (uint64, 0 if online).
-  //   - **features**: The features supported by the peer (uint32).
-  //   - **supported_protocols**: List of supported protocols by the peer (repeated bytes).
-  //   - **user_agent**: The user agent advertised by the peer (string).
+  // - **connected_peers**: List of `HttpPeer` objects currently connected to the wallet.
+  //   - **url**: The connection URL (string).
+  //   - **last_latency**: The latency of the last request to this peer (`AverageLatency`).
+  //   - **is_online**: Online status of the peer (bool).
   //
   // ### Example JavaScript gRPC client usage:
   //
   // ```javascript
-  // client.listConnectedPeers({}, (err, response) => {
+  // client.GetConnectedHttpPeer({}, (err, response) => {
   //   if (err) console.error(err);
   //   else console.log("Connected Peers:", response);
   // });
@@ -743,30 +742,14 @@ service Wallet {
   //
   // ```json
   // {
-  //   "connected_peers": [
-  //     {
-  //       "public_key": "0x1234abcd...",
-  //       "node_id": "0x5678efgh...",
-  //       "addresses": [
-  //         "127.0.0.1:18080",
-  //         "192.168.1.2:18080"
-  //       ],
-  //       "last_connection": 1625493123,
-  //       "flags": 1,
-  //       "banned_until": 0,
-  //       "banned_reason": "",
-  //       "offline_at": 0,
-  //       "features": 10,
-  //       "supported_protocols": [
-  //         "protocol_v1",
-  //         "protocol_v2"
-  //       ],
-  //       "user_agent": "TariBaseNode/1.0.0"
-  //     }
-  //   ]
+  //   "connected_peers": {
+  //       "url": "http://127.0.0.1:18080",
+  //       "last_latency": { "value": 42 },
+  //       "is_online": true
+  //    }
   // }
   // ```
-  rpc ListConnectedPeers(Empty) returns (ListConnectedPeersResponse);
+  rpc GetConnectedHttpPeer(Empty) returns (GetConnectedHttpPeerResponse);
 
   // Cancels a specific transaction by its ID.
   //
@@ -1106,8 +1089,89 @@ service Wallet {
     option deprecated = true;
   }
 
-  // Get all completed transactions including cancelled ones, sorted by timestamp and paginated (streaming version)
-  // Recommended: Use this streaming version for better performance and progressive loading
+  // Streams previously completed wallet transactions to the client.
+  //
+  // The `GetAllCompletedTransactionsStream` RPC provides a paginated, filtered stream of previously completed transactions
+  // from the wallet database. Unlike real-time event streaming, this RPC allows clients to retrieve historical transaction
+  // data using offset, limit, and optional status-based filtering.
+  //
+  // This is ideal for applications that need to display a transaction history, perform analytics, or resume from a known offset.
+  //
+  // ### Request Parameters:
+  // - **offset** (uint64): The starting index in the list of completed transactions.
+  // - **limit** (uint64): Maximum number of transactions to return. Capped at 50 per request.
+  // - **status_bitflag** (uint64): Optional bitflag to filter transactions by status (e.g., mined, cancelled).
+  //
+  // ### Response Stream:
+  // - Each message in the response stream is a `GetCompletedTransactionsResponse` containing:
+  //   - **transaction**: A `TransactionInfo` object representing a completed wallet transaction.
+  //
+  // ### `TransactionInfo` Fields:
+  // - **tx_id** (uint64): Unique transaction identifier.
+  // - **source_address** (bytes): Sender address.
+  // - **dest_address** (bytes): Recipient address.
+  // - **status** (enum): Status of the transaction (`Completed`, `Mined`, `Cancelled`, etc.).
+  // - **direction** (enum): `"Inbound"` or `"Outbound"`.
+  // - **amount** (uint64): Transaction amount in microTari.
+  // - **fee** (uint64): Transaction fee in microTari.
+  // - **is_cancelled** (bool): Whether the transaction was cancelled.
+  // - **excess_sig** (bytes): Signature of the transaction kernel excess.
+  // - **timestamp** (uint64): UNIX timestamp of the transaction creation time.
+  // - **raw_payment_id** (bytes): Raw payment ID used in the transaction.
+  // - **user_payment_id** (bytes): User-visible payment ID, if applicable.
+  // - **mined_in_block_height** (uint64): Block height where the transaction was mined. Zero if not mined.
+  // - **input_commitments** (repeated bytes): Commitments for transaction inputs.
+  // - **output_commitments** (repeated bytes): Commitments for transaction outputs.
+  // - **payment_references_sent** (repeated bytes): Metadata references associated with sent outputs.
+  // - **payment_references_received** (repeated bytes): Metadata references associated with received outputs.
+  // - **payment_references_change** (repeated bytes): Metadata references associated with change outputs.
+  //
+  // ### Example JavaScript gRPC client usage:
+  // ```javascript
+  // const call = client.getAllCompletedTransactionsStream({
+  //   offset: 0,
+  //   limit: 20,
+  //   status_bitflag: 0
+  // });
+  //
+  // call.on("data", (response) => {
+  //   console.log("Completed Transaction:", response.transaction);
+  // });
+  //
+  // call.on("end", () => {
+  //   console.log("Stream ended.");
+  // });
+  //
+  // call.on("error", (err) => {
+  //   console.error("Stream error:", err);
+  // });
+  // ```
+  //
+  // ### Sample JSON Streamed Response:
+  // ```json
+  // {
+  //   "transaction": {
+  //     "tx_id": 103248,
+  //     "source_address": "0xabc123...",
+  //     "dest_address": "0xdef456...",
+  //     "status": "Completed",
+  //     "direction": "Outbound",
+  //     "amount": 100000000,
+  //     "fee": 200000,
+  //     "is_cancelled": false,
+  //     "excess_sig": "0x...",
+  //     "timestamp": 1670000000,
+  //     "raw_payment_id": "0xdeadbeef...",
+  //     "user_payment_id": "0xdeadbeef...",
+  //     "mined_in_block_height": 202000,
+  //     "input_commitments": ["0x...", "0x..."],
+  //     "output_commitments": ["0x...", "0x..."],
+  //     "payment_references_sent": ["0x...", "0x..."],
+  //     "payment_references_received": [],
+  //     "payment_references_change": []
+  //   }
+  // }
+  // ```
   rpc GetAllCompletedTransactionsStream(GetAllCompletedTransactionsRequest) returns (stream GetCompletedTransactionsResponse);
 
   // Gets transaction information by payment reference (PayRef)
@@ -1405,6 +1469,33 @@ message GetCompleteAddressResponse {
   string one_sided_address_emoji = 6;
 }
 
+
+message PrepareDepositMultisigTransactionRequest {
+  uint64 amount = 1;
+  uint64 party_number = 2;
+  repeated bytes public_keys = 3;
+  bytes recipient_address = 4;
+}
+
+message PrepareWithdrawMultisigTransactionRequest {
+  string utxo_commitment = 1;
+  repeated bytes signatures = 2;
+  bytes recipient_address = 3;
+}
+
+message PrepareDepositMultisigTransactionResponse {
+  bool is_success = 1;
+  string result = 2;
+  string failure_message = 3;
+}
+
+message PrepareWithdrawMultisigTransactionResponse {
+  bool is_success = 1;
+  string result = 2;
+  string failure_message = 3;
+}
+
+
 // A request to preapre a one sided transaction for offline signing
 message PrepareOneSidedTransactionForSigningRequest {
   PaymentRecipient recipient = 1;
@@ -1430,6 +1521,7 @@ message BroadcastSignedOneSidedTransactionResponse {
 // A request to send funds to one or more recipients.
 message TransferRequest {
   repeated PaymentRecipient recipients = 1;
+  bool single_tx = 2;
 }
 
 message SendShaAtomicSwapRequest {
@@ -1729,6 +1821,8 @@ message CheckConnectivityResponse{
     Online = 1;
     // The wallet is not connected to any peers
     Offline = 2;
+    // The wallet connection is degraded (e.g., limited connectivity)
+    Degraded = 3;
   }
   // The current connectivity state of the wallet
   OnlineStatus status = 1;
@@ -1949,4 +2043,20 @@ message SignMessageResponse {
   string signature = 1;
   // The public nonce component as hex-encoded string
   string public_nonce = 2;
+}
+
+// Response message for GetConnectedHttpPeerResponse
+message GetConnectedHttpPeerResponse {
+  // The connected HTTP base node
+  HttpPeer connected_peer = 1;
+}
+
+// The HttpPeer message represents a connected HTTP peer in the wallet.
+message HttpPeer {
+  // The connection URL
+  string url = 1;
+  // The latency of the last request to this peer in ms
+  uint64 last_latency = 2;
+  // Online status of the peer
+  bool is_online = 3;
 }

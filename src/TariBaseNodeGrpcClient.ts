@@ -1,6 +1,14 @@
 import { ChannelCredentials, ServiceError } from "@grpc/grpc-js";
 
-import { BaseNodeClient, BlockHeaderResponse, TipInfoResponse, GetBlocksRequest, GetNetworkStateRequest, GetNetworkStateResponse, ValueAtHeightResponse } from "./client/base_node.js";
+import {
+  BaseNodeClient,
+  BlockHeaderResponse,
+  TipInfoResponse,
+  GetBlocksRequest,
+  GetNetworkStateRequest,
+  GetNetworkStateResponse,
+  ValueAtHeightResponse,
+} from "./client/base_node.js";
 import { HistoricalBlock } from "./client/block.js";
 import { Empty } from "./client/types.js";
 import Long from "long";
@@ -40,25 +48,25 @@ export class TariBaseNodeGrpcClient implements ITariBaseNodeGrpcClient {
 
   public getBlocks(request: GetBlocksRequest): AsyncIterable<HistoricalBlock> {
     const stream = this.client.getBlocks(request);
-    
+
     return {
       [Symbol.asyncIterator]() {
         return {
           async next() {
             return new Promise((resolve, reject) => {
-              stream.on('data', (block: HistoricalBlock) => {
+              stream.on("data", (block: HistoricalBlock) => {
                 resolve({ value: block, done: false });
               });
-              stream.on('end', () => {
+              stream.on("end", () => {
                 resolve({ value: undefined, done: true });
               });
-              stream.on('error', (error) => {
+              stream.on("error", (error) => {
                 reject(error);
               });
             });
-          }
+          },
         };
-      }
+      },
     };
   }
 
@@ -79,7 +87,7 @@ export class TariBaseNodeGrpcClient implements ITariBaseNodeGrpcClient {
   public async *getTokensInCirculation(heights: number[] = []): AsyncIterable<ValueAtHeightResponse> {
     const request = GetBlocksRequest.create({ heights });
     const stream = this.client.getTokensInCirculation(request);
-    
+
     for await (const response of stream) {
       yield response;
     }
@@ -89,7 +97,7 @@ export class TariBaseNodeGrpcClient implements ITariBaseNodeGrpcClient {
     const request = GetNetworkStateRequest.create();
     const response = await new Promise<GetNetworkStateResponse>((resolve, reject) => {
       this.client.getNetworkState(request, (error: ServiceError | null, response: GetNetworkStateResponse) => {
-        console.log('getNetworkState', error, response);
+        console.log("getNetworkState", error, response);
         if (error) {
           reject(error);
         } else {
@@ -100,7 +108,7 @@ export class TariBaseNodeGrpcClient implements ITariBaseNodeGrpcClient {
 
     // Return a simple status object that matches the test expectations
     return {
-      status: response.initialSyncAchieved ? 1 : 0
+      status: response.initialSyncAchieved ? 1 : 0,
     };
   }
 }

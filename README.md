@@ -24,10 +24,10 @@ pnpm add @krakaw/wallet-interface
 ### gRPC Wallet Client
 
 ```typescript
-import { TariWalletGrpcClient } from '@krakaw/wallet-interface';
+import { TariWalletGrpcClient } from "@krakaw/wallet-interface";
 
 // Create a client connected to a Tari wallet gRPC service
-const client = new TariWalletGrpcClient('localhost:18142');
+const client = new TariWalletGrpcClient("localhost:18142");
 
 // Get wallet balance
 const balance = await client.getBalance();
@@ -36,14 +36,36 @@ console.log(`Available balance: ${balance.availableBalance}`);
 // Get wallet address
 const address = await client.getAddress();
 
-// Transfer funds
+// Transfer funds (single recipient)
 const result = await client.transfer({
-  recipients: [{
-    address: 'recipient-address',
-    amount: 1000,
-    feePerGram: 25,
-    paymentType: 0 // STANDARD_MIMBLEWIMBLE
-  }]
+  recipients: [
+    {
+      address: "recipient-address",
+      amount: 1000,
+      feePerGram: 25,
+      paymentType: 0, // STANDARD_MIMBLEWIMBLE
+    },
+  ],
+  singleTx: false, // Optional: bundle multiple recipients in one transaction
+});
+
+// Multi-recipient transfer (new feature)
+const multiResult = await client.transfer({
+  recipients: [
+    {
+      address: "recipient-1-address",
+      amount: 1000,
+      feePerGram: 25,
+      paymentType: 1, // ONE_SIDED
+    },
+    {
+      address: "recipient-2-address",
+      amount: 2000,
+      feePerGram: 25,
+      paymentType: 1, // ONE_SIDED
+    },
+  ],
+  singleTx: true, // Bundle all recipients into single on-chain transaction
 });
 
 // Close the connection when done
@@ -53,10 +75,10 @@ client.close();
 ### Base Node gRPC Client
 
 ```typescript
-import { TariBaseNodeGrpcClient } from '@krakaw/wallet-interface';
+import { TariBaseNodeGrpcClient } from "@krakaw/wallet-interface";
 
 // Create a client connected to a Tari base node gRPC service
-const baseNodeClient = new TariBaseNodeGrpcClient('localhost:18141');
+const baseNodeClient = new TariBaseNodeGrpcClient("localhost:18141");
 
 // Get chain metadata
 const metadata = await baseNodeClient.getChainMetadata();
@@ -69,21 +91,21 @@ baseNodeClient.close();
 ### CLI Wallet Client
 
 ```typescript
-import { TariWalletCliClient } from '@krakaw/wallet-interface';
+import { TariWalletCliClient } from "@krakaw/wallet-interface";
 
 // Create a client using the Tari wallet CLI executable
-const client = new TariWalletCliClient('/path/to/tari_wallet_cli');
+const client = new TariWalletCliClient("/path/to/tari_wallet_cli");
 
 // Initialize a SHA atomic swap
 const swapResult = await client.initShaAtomicSwap({
   amount: 1000,
-  pubKey: 'recipient-public-key'
+  pubKey: "recipient-public-key",
 });
 
 // Finalize a SHA atomic swap
 await client.finaliseShaAtomicSwap({
   outputHash: swapResult.outputHash,
-  preImageHex: swapResult.preImageHex
+  preImageHex: swapResult.preImageHex,
 });
 ```
 

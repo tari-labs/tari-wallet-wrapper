@@ -1,2 +1,2 @@
-import {default as Long} from 'new-long';
-export default Long; 
+import { default as Long } from "new-long";
+export default Long;

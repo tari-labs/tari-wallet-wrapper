@@ -10,7 +10,6 @@ import {
   TransferRequest,
   TransferResponse,
   WalletClient,
-  PaymentRecipient,
   SendShaAtomicSwapRequest,
   SendShaAtomicSwapResponse,
   ClaimShaAtomicSwapRequest,
@@ -125,7 +124,7 @@ export class TariWalletGrpcClient implements ITariWalletGrpcClient {
     });
     return stateResponse;
   }
-  
+
   public async getAddress(): Promise<GetCompleteAddressResponse> {
     const stateResponse = await new Promise<GetCompleteAddressResponse>((resolve, reject) => {
       this.client.getCompleteAddress({}, (error: ServiceError | null, response: GetCompleteAddressResponse) => {
@@ -139,21 +138,21 @@ export class TariWalletGrpcClient implements ITariWalletGrpcClient {
     return stateResponse;
   }
 
-
   public async getPaymentIdAddress(paymentId: string): Promise<GetCompleteAddressResponse> {
     const stateResponse = await new Promise<GetCompleteAddressResponse>((resolve, reject) => {
-      this.client.getPaymentIdAddress({ paymentId: Buffer.from(paymentId, 'hex') }, (error: ServiceError | null, response: GetCompleteAddressResponse) => {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(response);
-        }
-      });
+      this.client.getPaymentIdAddress(
+        { paymentId: Buffer.from(paymentId, "hex") },
+        (error: ServiceError | null, response: GetCompleteAddressResponse) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve(response);
+          }
+        },
+      );
     });
     return stateResponse;
   }
-  
-
 
   public async transfer(transferRequest: TransferRequest): Promise<TransferResponse> {
     const stateResponse = await new Promise<TransferResponse>((resolve, reject) => {
@@ -168,46 +167,55 @@ export class TariWalletGrpcClient implements ITariWalletGrpcClient {
     return stateResponse;
   }
 
-  public async getBlockHeightTransactions(request: GetBlockHeightTransactionsRequest): Promise<GetBlockHeightTransactionsResponse> {
+  public async getBlockHeightTransactions(
+    request: GetBlockHeightTransactionsRequest,
+  ): Promise<GetBlockHeightTransactionsResponse> {
     const stateResponse = await new Promise<GetBlockHeightTransactionsResponse>((resolve, reject) => {
-      this.client.getBlockHeightTransactions(request, (error: ServiceError | null, response: GetBlockHeightTransactionsResponse) => {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(response);
-        }
-      });
+      this.client.getBlockHeightTransactions(
+        request,
+        (error: ServiceError | null, response: GetBlockHeightTransactionsResponse) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve(response);
+          }
+        },
+      );
     });
     return stateResponse;
   }
 
   public async streamTransactionEvents(): Promise<ClientReadableStream<TransactionEventResponse>> {
     return this.client.streamTransactionEvents({});
-    
   }
 
   public async sendShaAtomicSwap(sendRequest: SendShaAtomicSwapRequest): Promise<SendShaAtomicSwapResponse> {
-
     return new Promise<SendShaAtomicSwapResponse>((resolve, reject) => {
-      this.client.sendShaAtomicSwapTransaction(sendRequest, (error: ServiceError | null, response: SendShaAtomicSwapResponse) => {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(response);
-        }
-      });
+      this.client.sendShaAtomicSwapTransaction(
+        sendRequest,
+        (error: ServiceError | null, response: SendShaAtomicSwapResponse) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve(response);
+          }
+        },
+      );
     });
   }
 
   public async claimShaAtomicSwap(claimRequest: ClaimShaAtomicSwapRequest): Promise<ClaimShaAtomicSwapResponse> {
     return new Promise<ClaimShaAtomicSwapResponse>((resolve, reject) => {
-      this.client.claimShaAtomicSwapTransaction(claimRequest, (error: ServiceError | null, response: ClaimShaAtomicSwapResponse) => {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(response);
-        }
-      });
+      this.client.claimShaAtomicSwapTransaction(
+        claimRequest,
+        (error: ServiceError | null, response: ClaimShaAtomicSwapResponse) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve(response);
+          }
+        },
+      );
     });
   }
 }

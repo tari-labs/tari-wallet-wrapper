@@ -1,10 +1,10 @@
-import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest';
-import { TariBaseNodeGrpcClient } from './TariBaseNodeGrpcClient.js';
-import { GetBlocksRequest } from './client/base_node.js';
-import Long from 'long';
-import { HistoricalBlock } from './client/block.js';
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from "vitest";
+import { TariBaseNodeGrpcClient } from "./TariBaseNodeGrpcClient.js";
+import { GetBlocksRequest } from "./client/base_node.js";
+import Long from "long";
+import { HistoricalBlock } from "./client/block.js";
 
-describe('TariBaseNodeGrpcClient', () => {
+describe("TariBaseNodeGrpcClient", () => {
   let client: TariBaseNodeGrpcClient;
 
   beforeEach(() => {
@@ -12,14 +12,13 @@ describe('TariBaseNodeGrpcClient', () => {
   });
 
   beforeAll(async () => {
-    client = new TariBaseNodeGrpcClient('127.0.0.1:18142');
+    client = new TariBaseNodeGrpcClient("127.0.0.1:18142");
   });
 
-  describe('getVersion', () => {
-    it('should return version', async () => {
+  describe("getVersion", () => {
+    it("should return version", async () => {
       // Act
       const result = await client.getVersion();
-
 
       // Assert
       expect(result).toBeDefined();
@@ -27,12 +26,11 @@ describe('TariBaseNodeGrpcClient', () => {
     });
   });
 
-
   // describe('getTipInfo', () => {
   //   it('should return tip info', async () => {
   //     // Act
   //     const result = await client.getTipInfo();
-      
+
   //     // Assert
   //     expect(result).toBeDefined();
   //     expect(result.metadata).toBeDefined();
@@ -46,7 +44,7 @@ describe('TariBaseNodeGrpcClient', () => {
   //   it('should return connectivity status', async () => {
   //     // Act
   //     const result = await client.checkConnectivity();
-      
+
   //     // Assert
   //     expect(result).toBeDefined();
   //     expect(result.status).toBeDefined();
@@ -54,12 +52,11 @@ describe('TariBaseNodeGrpcClient', () => {
   //   });
   // });
 
-  describe('getBlocks', () => {
-
-    it('should stream blocks for given heights', async () => {
+  describe("getBlocks", () => {
+    it("should stream blocks for given heights", async () => {
       // Use a promise to wait for the blocks to be streamed
       const request = GetBlocksRequest.create({
-        heights: [Long.fromNumber(1), Long.fromNumber(2)]
+        heights: [Long.fromNumber(1), Long.fromNumber(2)],
       });
       const blocks: any[] = [];
       for await (const block of client.getBlocks(request)) {
@@ -70,13 +67,13 @@ describe('TariBaseNodeGrpcClient', () => {
       expect(blocks).toBeDefined();
       expect(Array.isArray(blocks)).toBe(true);
       expect(blocks.length).toBeGreaterThan(0);
-      
+
       // Verify block structure
-      blocks.forEach(({block}) => {
-        expect(block).toHaveProperty('header');
-        expect(block).toHaveProperty('body');
-        expect(block.header).toHaveProperty('height');
-        expect(block.header).toHaveProperty('hash');
+      blocks.forEach(({ block }) => {
+        expect(block).toHaveProperty("header");
+        expect(block).toHaveProperty("body");
+        expect(block.header).toHaveProperty("height");
+        expect(block.header).toHaveProperty("hash");
       });
     });
   });

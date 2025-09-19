@@ -1,22 +1,22 @@
 // Base58 alphabet used by Tari
-const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
 export function base58EncodeAddressHex(inputHex: string): string {
-    const network = base58Encode(Buffer.from(inputHex.slice(0, 2), "hex"));
-    const features = base58Encode(Buffer.from(inputHex.slice(2, 4), "hex"));
-    const payload = base58Encode(Buffer.from(inputHex.slice(4), "hex"));
-    return `${network}${features}${payload}`;
+  const network = base58Encode(Buffer.from(inputHex.slice(0, 2), "hex"));
+  const features = base58Encode(Buffer.from(inputHex.slice(2, 4), "hex"));
+  const payload = base58Encode(Buffer.from(inputHex.slice(4), "hex"));
+  return `${network}${features}${payload}`;
 }
 
 /**
  * Encodes a buffer to Base58 string
- * 
+ *
  * @param input - The input buffer to encode
  * @returns The Base58 encoded string
  */
 export function base58Encode(input: Uint8Array): string {
   if (input.length === 0) {
-    return '';
+    return "";
   }
 
   // Convert input to BigInt
@@ -26,7 +26,7 @@ export function base58Encode(input: Uint8Array): string {
   }
 
   // Convert to Base58
-  let result = '';
+  let result = "";
   while (num > 0) {
     const mod = Number(num % BigInt(58));
     result = ALPHABET[mod] + result;
@@ -35,7 +35,7 @@ export function base58Encode(input: Uint8Array): string {
 
   // Handle leading zeros
   for (let i = 0; i < input.length && input[i] === 0; i++) {
-    result = '1' + result;
+    result = "1" + result;
   }
 
   return result;

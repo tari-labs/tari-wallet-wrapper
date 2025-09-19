@@ -1,96 +1,99 @@
-import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest';
-import { TariWalletGrpcClient } from './TariWalletGrpcClient.js';
-import { PaymentRecipient_PaymentType, TransactionEvent, TransactionEventResponse, TransferRequest } from './client/wallet.js';
-import Long from 'long';
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from "vitest";
+import { TariWalletGrpcClient } from "./TariWalletGrpcClient.js";
+import {
+  PaymentRecipient_PaymentType,
+  TransactionEvent,
+  TransactionEventResponse,
+  TransferRequest,
+} from "./client/wallet.js";
+import Long from "long";
 
-const ESME_DESTINATION_ADDRESS = 'f2FhXUsX4EiafVtZD1Ku8faodYxpmX7t4uPvwFFpywkFTkCRDiDADJ641o9483BzoVAy2QjcZAaKa63dR8zZYTBT1qn';
-describe('TariWalletGrpcClient', () => {
+const ESME_DESTINATION_ADDRESS =
+  "f2FhXUsX4EiafVtZD1Ku8faodYxpmX7t4uPvwFFpywkFTkCRDiDADJ641o9483BzoVAy2QjcZAaKa63dR8zZYTBT1qn";
+describe("TariWalletGrpcClient", () => {
   let client: TariWalletGrpcClient;
   let stream: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    
   });
 
   beforeAll(async () => {
-    client = new TariWalletGrpcClient('127.0.0.1:18183');
-     stream = await client.streamTransactionEvents();
-      
+    client = new TariWalletGrpcClient("127.0.0.1:18183");
+    stream = await client.streamTransactionEvents();
   });
 
   afterEach(() => {
     // client.close();
   });
 
-  describe('getVersion', () => {
-    it('should return the wallet version', async () => {
+  describe("getVersion", () => {
+    it("should return the wallet version", async () => {
       // Act
       const result = await client.getVersion();
-      
+
       // Assert
       expect(result).toBeDefined();
       expect(result.version).toBeDefined();
-      expect(typeof result.version).toBe('string');
+      expect(typeof result.version).toBe("string");
     });
   });
 
-  describe('checkConnectivity', () => {
-    it('should return connectivity status', async () => {
+  describe("checkConnectivity", () => {
+    it("should return connectivity status", async () => {
       // Act
       const result = await client.checkConnectivity();
-      console.log('result', result);
+      console.log("result", result);
       // Assert
       expect(result).toBeDefined();
       expect(result.status).toBeDefined();
-      expect( result.status).toBe(1);
+      expect(result.status).toBe(1);
     });
   });
 
-  describe('getBalance', () => {
-    it('should return wallet balance', async () => {
+  describe("getBalance", () => {
+    it("should return wallet balance", async () => {
       // Act
       const result = await client.getBalance();
-      
+
       // Assert
       expect(result).toBeDefined();
       expect(result.availableBalance).toBeDefined();
       expect(result.pendingIncomingBalance).toBeDefined();
       expect(result.pendingOutgoingBalance).toBeDefined();
       expect(result.availableBalance).toBeDefined();
-      expect(result.pendingIncomingBalance).toBeDefined(); 
+      expect(result.pendingIncomingBalance).toBeDefined();
       expect(result.pendingOutgoingBalance).toBeDefined();
     });
   });
 
-  describe('getAddress', () => {
-    it('should return the wallet address', async () => {
+  describe("getAddress", () => {
+    it("should return the wallet address", async () => {
       // Act
       const result = await client.getAddress();
-      
+
       // Assert
       expect(result).toBeDefined();
       expect(result.interactiveAddressBase58).toBeDefined();
-      expect(typeof result.interactiveAddressBase58).toBe('string');
+      expect(typeof result.interactiveAddressBase58).toBe("string");
       expect(result.interactiveAddressBase58.length).toBeGreaterThan(0);
     });
   });
 
-  describe('getPaymentIdAddress', () => {
-    it('should return a payment ID address', async () => {
+  describe("getPaymentIdAddress", () => {
+    it("should return a payment ID address", async () => {
       // Arrange
-      const paymentId = '1234567890abcdef';
-      
+      const paymentId = "1234567890abcdef";
+
       // Act
       const result = await client.getPaymentIdAddress(paymentId);
-      
+
       // Assert
       expect(result).toBeDefined();
       expect(result.interactiveAddressBase58).toBeDefined();
-      expect(typeof result.interactiveAddressBase58).toBe('string');
+      expect(typeof result.interactiveAddressBase58).toBe("string");
       expect(result.interactiveAddressBase58.length).toBeGreaterThan(0);
     });
-
   });
 
   // describe('transaction event stream',  () => {
@@ -126,36 +129,37 @@ describe('TariWalletGrpcClient', () => {
   //           paymentId: Buffer.from(`wallet-wrapper-test-${Date.now()}`)
   //         }]
   //       };
-  
+
   //       // Act
   //       //  client.transfer(transferRequest).then(() => {
   //       //  });
-        
 
   //     });
   //     await eventPromise;
 
   //     // Arrange
-    
+
   //   });
   // });
 
-  describe('transfer', () => {
-    it('should attempt to transfer funds to a recipient', async () => {
+  describe("transfer", () => {
+    it("should attempt to transfer funds to a recipient", async () => {
       // Arrange
       const transferRequest: TransferRequest = {
-        recipients: [{
-          address: ESME_DESTINATION_ADDRESS,
-          amount: Long.fromNumber(1), // 1 Tari
-          feePerGram: Long.fromNumber(25),
-          paymentType: PaymentRecipient_PaymentType.ONE_SIDED,
-          userPaymentId: {
-            utf8String: `wallet-wrapper-test-${Date.now()}`,
-            u256: Buffer.from([]),
-            userBytes: Buffer.from([])
+        recipients: [
+          {
+            address: ESME_DESTINATION_ADDRESS,
+            amount: Long.fromNumber(1), // 1 Tari
+            feePerGram: Long.fromNumber(25),
+            paymentType: PaymentRecipient_PaymentType.ONE_SIDED,
+            userPaymentId: {
+              utf8String: `wallet-wrapper-test-${Date.now()}`,
+              u256: Buffer.from([]),
+              userBytes: Buffer.from([]),
+            },
+            rawPaymentId: Buffer.from([]),
           },
-          rawPaymentId: Buffer.from([])
-        }]
+        ],
       };
 
       // Act
@@ -167,7 +171,7 @@ describe('TariWalletGrpcClient', () => {
       expect(result.results[0].address).toBe(ESME_DESTINATION_ADDRESS);
       expect(result.results[0].isSuccess).toBe(false);
       expect(result.results[0].transactionId).toBeDefined();
-      expect(result.results[0].failureMessage).toBe('Output manager error: `Not enough funds to fulfil transaction`');
+      expect(result.results[0].failureMessage).toBe("Output manager error: `Not enough funds to fulfil transaction`");
     });
   });
 });
