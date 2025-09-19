@@ -19,6 +19,8 @@ import {
   GetBlockHeightTransactionsRequest,
   CoinSplitRequest,
   CoinSplitResponse,
+  CancelTransactionRequest,
+  CancelTransactionResponse,
 } from "./client/wallet";
 import { GetIdentityResponse } from "./client/network";
 import { ClientReadableStream } from "@grpc/grpc-js";
@@ -34,6 +36,7 @@ export interface ITariWalletGrpcClient {
   streamTransactionEvents(onData: any, onError: any): Promise<ClientReadableStream<TransactionEventResponse>>;
   sendShaAtomicSwap(sendRequest: SendShaAtomicSwapRequest): Promise<SendShaAtomicSwapResponse>;
   claimShaAtomicSwap(claimRequest: ClaimShaAtomicSwapRequest): Promise<ClaimShaAtomicSwapResponse>;
+  cancelTransaction(request: CancelTransactionRequest): Promise<CancelTransactionResponse>;
 }
 
 export class TariWalletGrpcClient implements ITariWalletGrpcClient {
@@ -216,6 +219,18 @@ export class TariWalletGrpcClient implements ITariWalletGrpcClient {
           }
         },
       );
+    });
+  }
+
+  public async cancelTransaction(request: CancelTransactionRequest): Promise<CancelTransactionResponse> {
+    return new Promise<CancelTransactionResponse>((resolve, reject) => {
+      this.client.cancelTransaction(request, (error: ServiceError | null, response: CancelTransactionResponse) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(response);
+        }
+      });
     });
   }
 }

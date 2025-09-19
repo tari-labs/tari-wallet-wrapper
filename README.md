@@ -68,6 +68,17 @@ const multiResult = await client.transfer({
   singleTx: true, // Bundle all recipients into single on-chain transaction
 });
 
+// Cancel a transaction by its ID
+const cancelResult = await client.cancelTransaction({
+  txId: 12345, // Transaction ID to cancel
+});
+
+if (cancelResult.isSuccess) {
+  console.log('Transaction cancelled successfully');
+} else {
+  console.log('Failed to cancel:', cancelResult.failureMessage);
+}
+
 // Close the connection when done
 client.close();
 ```
