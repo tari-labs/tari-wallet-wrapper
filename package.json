@@ -1,6 +1,6 @@
 {
   "name": "@tari-labs/wallet-interface",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "scripts": {
     "compile:cjs": "tsc -p ./tsconfig.cjs.json",
     "compile:esm": "tsc -p ./tsconfig.esm.json",
