@@ -6,7 +6,7 @@ on:
 jobs:
   bump-version:
     name: 'Bump Version on dev'
-    runs-on: tari-ubuntu-latest
+    runs-on: [self-hosted, linux]
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
