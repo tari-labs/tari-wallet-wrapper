@@ -154,6 +154,114 @@ pnpm lint
 pnpm format:fix
 ```
 
+## Adding New/ Updating gRPC methods
+
+When new functionality is added to the Tari protocol, you can extend this library by following these steps:
+
+### 1. Update Protocol Buffer Definitions
+
+First, add the new method to the appropriate `.proto` file in `src/proto/`:
+
+```protobuf
+// In src/proto/wallet.proto
+service Wallet {
+  // Add new method to service definition
+  rpc NewFeature(NewFeatureRequest) returns (NewFeatureResponse);
+}
+
+// Add message definitions at bottom of file
+message NewFeatureRequest {
+  uint64 some_param = 1;
+}
+
+message NewFeatureResponse {
+  bool success = 1;
+  string message = 2;
+}
+```
+
+### 2. Generate TypeScript Types
+
+Run the generation script to create TypeScript types from the updated proto files:
+
+```bash
+cd src/proto
+./generate.sh --tari-path ../../../tari --no-dry-run
+```
+
+This script will:
+- Copy the latest `.proto` files from the Tari repository
+- Use `protoc` with the `ts-proto` plugin to generate TypeScript code
+- Update generated files in `src/client/` directory
+
+### 3. Implement Client Method
+
+Add the new method to the appropriate client class:
+
+```typescript
+// In src/TariWalletGrpcClient.ts
+
+// 1. Add to interface
+export interface ITariWalletGrpcClient {
+  // ... existing methods
+  newFeature(request: NewFeatureRequest): Promise<NewFeatureResponse>;
+}
+
+// 2. Add to class implementation  
+export class TariWalletGrpcClient implements ITariWalletGrpcClient {
+  
+  public async newFeature(request: NewFeatureRequest): Promise<NewFeatureResponse> {
+    return new Promise<NewFeatureResponse>((resolve, reject) => {
+      this.client.newFeature(request, (error: ServiceError | null, response: NewFeatureResponse) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(response);
+        }
+      });
+    });
+  }
+}
+```
+
+### 4. Update Imports
+
+Add the new types to the import statement:
+
+```typescript
+// In src/TariWalletGrpcClient.ts
+import {
+  // ... existing imports
+  NewFeatureRequest,
+  NewFeatureResponse,
+} from "./client/wallet";
+```
+
+### 5. Add Tests
+
+Create tests for the new functionality:
+
+```typescript
+// In src/TariWalletGrpcClient.spec.ts
+describe("newFeature", () => {
+  it("should execute new feature successfully", async () => {
+    const request = { some_param: 123 };
+    const result = await client.newFeature(request);
+    
+    expect(result).toBeDefined();
+    expect(result.success).toBe(true);
+  });
+});
+```
+
+### Important Notes
+
+- **Never edit generated files** in `src/client/` - they will be overwritten
+- **Proto files are the source of truth** - all changes start there
+- **All methods follow the same Promise-based pattern** with proper error handling
+- **Run tests** after implementation to ensure everything works correctly
+- **Generated TypeScript provides full type safety** for requests and responses
+
 ## License
 
 ISC
