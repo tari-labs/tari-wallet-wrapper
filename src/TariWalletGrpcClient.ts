@@ -1,4 +1,5 @@
 import { ChannelCredentials, ServiceError } from "@grpc/grpc-js";
+import Long from "long";
 
 import {
   CheckConnectivityResponse,
@@ -242,9 +243,9 @@ export class TariWalletGrpcClient implements ITariWalletGrpcClient {
 
   public async getTransactionHistory(request?: GetAllCompletedTransactionsRequest): Promise<ClientReadableStream<GetCompletedTransactionsResponse>> {
     const defaultRequest = {
-      offset: 0,
-      limit: 100,
-      statusBitflag: 0, // All statuses
+      offset: Long.fromNumber(0),
+      limit: Long.fromNumber(100),
+      statusBitflag: Long.fromNumber(0), // All statuses
       ...request
     };
     return this.client.getAllCompletedTransactionsStream(defaultRequest);

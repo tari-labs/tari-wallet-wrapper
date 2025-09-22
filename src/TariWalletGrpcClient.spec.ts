@@ -160,6 +160,7 @@ describe("TariWalletGrpcClient", () => {
             rawPaymentId: Buffer.from([]),
           },
         ],
+        singleTx: false,
       };
 
       // Act
