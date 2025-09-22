@@ -4,19 +4,100 @@ A TypeScript client library for interacting with the Tari cryptocurrency wallet 
 
 ## Features
 
-- Connect to Tari wallets via gRPC
-- Connect to Tari base nodes via gRPC
-- Execute wallet commands using CLI
-- Transfer funds
-- Manage SHA atomic swaps (initialize, finalize, claim refunds)
-- Query wallet information (balance, address, state)
+### Core Connectivity
+- **gRPC Wallet Client** - High-performance connection to Tari wallets with streaming support
+- **gRPC Base Node Client** - Direct blockchain queries and network state monitoring  
+- **CLI Wallet Client** - Command-line interface wrapper for atomic swap operations
+
+### Transaction Management
+- **Multi-recipient transfers** - Send to multiple addresses in single or bundled transactions
+- **Transaction cancellation** - Cancel pending transactions by ID
+- **Real-time transaction streaming** - Monitor transaction events as they occur
+- **Transaction history** - Retrieve complete transaction history with filtering and pagination
+- **Payment references** - Cryptographic payment verification and tracking
+
+### Advanced Transfer Types
+- **Standard Mimblewimble** - Interactive transactions with full privacy
+- **One-sided transactions** - Send without recipient participation
+- **One-sided stealth** - Enhanced privacy transfers
+- **Coin splitting** - Create multiple smaller outputs from larger ones
+- **Burn transactions** - Destroy Tari currency permanently
+
+### Atomic Swap Support
+- **SHA Atomic Swaps** - Cross-chain trading with cryptographic guarantees
+- **HTLC operations** - Hash Time Locked Contract management
+- **Pre-image handling** - Secure swap secret management
+- **Refund claiming** - Automated refund mechanisms
+
+### Wallet Operations
+- **Comprehensive balance queries** - Available, pending, and timelocked balances
+- **Address generation** - Multiple formats including Base58 and emoji encoding
+- **Payment ID support** - Tagged transactions and address generation  
+- **Wallet state monitoring** - Sync status, network connectivity, validation state
+- **Identity management** - Public keys and node identification
+
+### Blockchain Integration
+- **Block streaming** - Real-time blockchain data access
+- **Chain metadata** - Tip information and network statistics
+- **Token circulation** - Supply metrics by block height
+- **Network diagnostics** - Connection quality and peer status
+
+### Developer Features
+- **Full TypeScript support** - Complete type safety with generated protobuf types
+- **Dual module output** - Both CommonJS and ES modules support
+- **Promise-based API** - Modern async/await compatible interface
+- **Comprehensive error handling** - Detailed error messages and status codes
+- **High-precision arithmetic** - Long integer support for blockchain amounts
 
 ## Installation
 
+This package is published to GitHub Packages. You need to configure your package manager to use GitHub's registry for the `@tari-labs` scope.
+
+### 1. Configure Registry
+
+Create or update your `.npmrc` file in your project root:
+
 ```bash
-npm install @krakaw/wallet-interface
+@tari-labs:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
+
+### 2. Set GitHub Token
+
+You'll need a GitHub Personal Access Token with `read:packages` permission:
+
+```bash
+# Set as environment variable
+export GITHUB_TOKEN=your_github_token_here
+
+# Or add to your shell profile (.bashrc, .zshrc, etc.)
+echo "export GITHUB_TOKEN=your_github_token_here" >> ~/.bashrc
+```
+
+**To create a GitHub token:**
+1. Go to GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)
+2. Click "Generate new token (classic)"
+3. Select `read:packages` scope
+4. Copy the generated token
+
+### 3. Install Package
+
+```bash
+npm install @tari-labs/wallet-interface
 # or
-pnpm add @krakaw/wallet-interface
+pnpm add @tari-labs/wallet-interface
+# or  
+yarn add @tari-labs/wallet-interface
+```
+
+### Alternative: Project-specific .npmrc
+
+You can also configure the registry in your project's `.npmrc` file instead of globally:
+
+```bash
+# In your project directory
+echo "@tari-labs:registry=https://npm.pkg.github.com" >> .npmrc
+echo "//npm.pkg.github.com/:_authToken=\${GITHUB_TOKEN}" >> .npmrc
 ```
 
 ## Usage
@@ -24,7 +105,7 @@ pnpm add @krakaw/wallet-interface
 ### gRPC Wallet Client
 
 ```typescript
-import { TariWalletGrpcClient } from "@krakaw/wallet-interface";
+import { TariWalletGrpcClient } from "@tari-labs/wallet-interface";
 
 // Create a client connected to a Tari wallet gRPC service
 const client = new TariWalletGrpcClient("localhost:18142");
@@ -101,7 +182,7 @@ client.close();
 ### Base Node gRPC Client
 
 ```typescript
-import { TariBaseNodeGrpcClient } from "@krakaw/wallet-interface";
+import { TariBaseNodeGrpcClient } from "@tari-labs/wallet-interface";
 
 // Create a client connected to a Tari base node gRPC service
 const baseNodeClient = new TariBaseNodeGrpcClient("localhost:18141");
@@ -117,7 +198,7 @@ baseNodeClient.close();
 ### CLI Wallet Client
 
 ```typescript
-import { TariWalletCliClient } from "@krakaw/wallet-interface";
+import { TariWalletCliClient } from "@tari-labs/wallet-interface";
 
 // Create a client using the Tari wallet CLI executable
 const client = new TariWalletCliClient("/path/to/tari_wallet_cli");

@@ -1,4 +1,6 @@
 {
+  "name": "@tari-labs/wallet-interface",
+  "version": "0.2.2",
   "scripts": {
     "compile:cjs": "tsc -p ./tsconfig.cjs.json",
     "compile:esm": "tsc -p ./tsconfig.esm.json",
@@ -15,8 +17,6 @@
   "files": [
     "build"
   ],
-  "name": "@krakaw/wallet-interface",
-  "version": "0.2.0",
   "description": "Tari Wallet API",
   "main": "./build/cjs/index.js",
   "module": "./build/esm/index.js",
