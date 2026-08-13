@@ -1,14 +1,14 @@
-name: 'Bump Version'
+name: "Bump Version"
 on:
   push:
     branches:
-      - 'main'
+      - "main"
 permissions:
   contents: write
   packages: write
 jobs:
   bump-version:
-    name: 'Bump Version on dev'
+    name: "Bump Version on dev"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source code
@@ -17,18 +17,16 @@ jobs:
           persist-credentials: false
           ref: ${{ github.ref }}
 
-      - name: 'cat package.json'
+      - name: "cat package.json"
         run: cat ./package.json
 
       - name: Automated Version Bump
         id: version-bump
         uses: phips28/gh-action-bump-version@master
         with:
-          tag-prefix: 'v'
+          tag-prefix: "v"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 'cat package.json'
+      - name: "cat package.json"
         run: cat ./package.json
-
-
