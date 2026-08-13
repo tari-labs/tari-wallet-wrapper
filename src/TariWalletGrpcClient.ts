@@ -42,7 +42,9 @@ export interface ITariWalletGrpcClient {
   sendShaAtomicSwap(sendRequest: SendShaAtomicSwapRequest): Promise<SendShaAtomicSwapResponse>;
   claimShaAtomicSwap(claimRequest: ClaimShaAtomicSwapRequest): Promise<ClaimShaAtomicSwapResponse>;
   cancelTransaction(request: CancelTransactionRequest): Promise<CancelTransactionResponse>;
-  getTransactionHistory(request?: GetAllCompletedTransactionsRequest): Promise<ClientReadableStream<GetCompletedTransactionsResponse>>;
+  getTransactionHistory(
+    request?: GetAllCompletedTransactionsRequest,
+  ): Promise<ClientReadableStream<GetCompletedTransactionsResponse>>;
   getTransactionInfo(request: GetTransactionInfoRequest): Promise<GetTransactionInfoResponse>;
 }
 
@@ -241,12 +243,14 @@ export class TariWalletGrpcClient implements ITariWalletGrpcClient {
     });
   }
 
-  public async getTransactionHistory(request?: GetAllCompletedTransactionsRequest): Promise<ClientReadableStream<GetCompletedTransactionsResponse>> {
+  public async getTransactionHistory(
+    request?: GetAllCompletedTransactionsRequest,
+  ): Promise<ClientReadableStream<GetCompletedTransactionsResponse>> {
     const defaultRequest = {
       offset: Long.fromNumber(0),
       limit: Long.fromNumber(100),
       statusBitflag: Long.fromNumber(0), // All statuses
-      ...request
+      ...request,
     };
     return this.client.getAllCompletedTransactionsStream(defaultRequest);
   }

@@ -5,11 +5,13 @@ A TypeScript client library for interacting with the Tari cryptocurrency wallet 
 ## Features
 
 ### Core Connectivity
+
 - **gRPC Wallet Client** - High-performance connection to Tari wallets with streaming support
-- **gRPC Base Node Client** - Direct blockchain queries and network state monitoring  
+- **gRPC Base Node Client** - Direct blockchain queries and network state monitoring
 - **CLI Wallet Client** - Command-line interface wrapper for atomic swap operations
 
 ### Transaction Management
+
 - **Multi-recipient transfers** - Send to multiple addresses in single or bundled transactions
 - **Transaction cancellation** - Cancel pending transactions by ID
 - **Real-time transaction streaming** - Monitor transaction events as they occur
@@ -17,6 +19,7 @@ A TypeScript client library for interacting with the Tari cryptocurrency wallet 
 - **Payment references** - Cryptographic payment verification and tracking
 
 ### Advanced Transfer Types
+
 - **Standard Mimblewimble** - Interactive transactions with full privacy
 - **One-sided transactions** - Send without recipient participation
 - **One-sided stealth** - Enhanced privacy transfers
@@ -24,25 +27,29 @@ A TypeScript client library for interacting with the Tari cryptocurrency wallet 
 - **Burn transactions** - Destroy Tari currency permanently
 
 ### Atomic Swap Support
+
 - **SHA Atomic Swaps** - Cross-chain trading with cryptographic guarantees
 - **HTLC operations** - Hash Time Locked Contract management
 - **Pre-image handling** - Secure swap secret management
 - **Refund claiming** - Automated refund mechanisms
 
 ### Wallet Operations
+
 - **Comprehensive balance queries** - Available, pending, and timelocked balances
 - **Address generation** - Multiple formats including Base58 and emoji encoding
-- **Payment ID support** - Tagged transactions and address generation  
+- **Payment ID support** - Tagged transactions and address generation
 - **Wallet state monitoring** - Sync status, network connectivity, validation state
 - **Identity management** - Public keys and node identification
 
 ### Blockchain Integration
+
 - **Block streaming** - Real-time blockchain data access
 - **Chain metadata** - Tip information and network statistics
 - **Token circulation** - Supply metrics by block height
 - **Network diagnostics** - Connection quality and peer status
 
 ### Developer Features
+
 - **Full TypeScript support** - Complete type safety with generated protobuf types
 - **Dual module output** - Both CommonJS and ES modules support
 - **Promise-based API** - Modern async/await compatible interface
@@ -75,6 +82,7 @@ echo "export GITHUB_TOKEN=your_github_token_here" >> ~/.bashrc
 ```
 
 **To create a GitHub token:**
+
 1. Go to GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)
 2. Click "Generate new token (classic)"
 3. Select `read:packages` scope
@@ -86,7 +94,7 @@ echo "export GITHUB_TOKEN=your_github_token_here" >> ~/.bashrc
 npm install @tari-labs/wallet-interface
 # or
 pnpm add @tari-labs/wallet-interface
-# or  
+# or
 yarn add @tari-labs/wallet-interface
 ```
 
@@ -155,25 +163,25 @@ const cancelResult = await client.cancelTransaction({
 });
 
 if (cancelResult.isSuccess) {
-  console.log('Transaction cancelled successfully');
+  console.log("Transaction cancelled successfully");
 } else {
-  console.log('Failed to cancel:', cancelResult.failureMessage);
+  console.log("Failed to cancel:", cancelResult.failureMessage);
 }
 
 // Get transaction history (streaming)
 const historyStream = await client.getTransactionHistory({
   offset: 0,
   limit: 50,
-  statusBitflag: 0 // All statuses
+  statusBitflag: 0, // All statuses
 });
 
-historyStream.on('data', (transaction) => {
-  console.log('Transaction:', transaction);
+historyStream.on("data", (transaction) => {
+  console.log("Transaction:", transaction);
 });
 
 // Get specific transaction info by ID
 const txInfo = await client.getTransactionInfo({ txId: 12345 });
-console.log('Transaction details:', txInfo);
+console.log("Transaction details:", txInfo);
 
 // Close the connection when done
 client.close();
@@ -271,6 +279,7 @@ cd src/proto
 ```
 
 This script will:
+
 - Copy the latest `.proto` files from the Tari repository
 - Use `protoc` with the `ts-proto` plugin to generate TypeScript code
 - Update generated files in `src/client/` directory
@@ -288,9 +297,8 @@ export interface ITariWalletGrpcClient {
   newFeature(request: NewFeatureRequest): Promise<NewFeatureResponse>;
 }
 
-// 2. Add to class implementation  
+// 2. Add to class implementation
 export class TariWalletGrpcClient implements ITariWalletGrpcClient {
-  
   public async newFeature(request: NewFeatureRequest): Promise<NewFeatureResponse> {
     return new Promise<NewFeatureResponse>((resolve, reject) => {
       this.client.newFeature(request, (error: ServiceError | null, response: NewFeatureResponse) => {
@@ -328,7 +336,7 @@ describe("newFeature", () => {
   it("should execute new feature successfully", async () => {
     const request = { some_param: 123 };
     const result = await client.newFeature(request);
-    
+
     expect(result).toBeDefined();
     expect(result.success).toBe(true);
   });

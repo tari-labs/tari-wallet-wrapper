@@ -1636,6 +1636,12 @@ message TransactionInfo {
   repeated bytes payment_references_sent = 17;
   repeated bytes payment_references_received = 18;
   repeated bytes payment_references_change = 19;
+  // The reason a transaction was rejected/cancelled, if applicable.
+  // Empty string if the transaction is not rejected.
+  string rejected_reason = 20;
+  // The highest lock height among all outputs (max of maturity and script_lock_height).
+  // Outputs cannot be spent until this height is reached.
+  uint64 lock_height = 21;
 }
 
 enum TransactionDirection {
@@ -1675,6 +1681,12 @@ enum TransactionStatus {
   TRANSACTION_STATUS_COINBASE_CONFIRMED = 13;
   // This is Coinbase transaction that is not currently detected as mined
   TRANSACTION_STATUS_COINBASE_NOT_IN_BLOCK_CHAIN = 14;
+  // This transaction is mined and confirmed, but the outputs are time-locked
+  TRANSACTION_STATUS_MINED_CONFIRMED_LOCKED = 15;
+  // This one-sided transaction is confirmed, but the outputs are time-locked
+  TRANSACTION_STATUS_ONE_SIDED_CONFIRMED_LOCKED = 16;
+  // This coinbase transaction is confirmed, but the outputs are time-locked
+  TRANSACTION_STATUS_COINBASE_CONFIRMED_LOCKED = 17;
 }
 
 message GetCompletedTransactionsRequest {
